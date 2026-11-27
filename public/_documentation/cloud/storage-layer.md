@@ -79,6 +79,13 @@ small originals can be saved locally while offline using those verified
 settings. Connect once first if settings have not loaded. Reconnecting refreshes
 the policy; the server enforces current upload limits before accepting bytes.
 
+In **Files**, use the row's **More actions → Download original** even when no
+preview is available. A text preview can arrive through workspace sync before
+the original is uploaded. The preview's **Storage** field distinguishes a
+file saved on this device, an upload pending or retrying, and a synced original.
+If no original is available, try again after the uploading device reconnects.
+Cloud authorization still applies to downloads.
+
 `file_meta.ref_count` is derived locally from reference edges in messages/posts;
 it is never synced (sanitized out of sync payloads) and cannot be set remotely.
 

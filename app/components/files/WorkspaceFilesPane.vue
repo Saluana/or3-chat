@@ -665,7 +665,8 @@ function rowActions(row: FileListRow) {
             ...(activeExplorer.value ? [moveAction] : []),
             ...(row.postType === 'doc' ? [{ label: 'Open document', icon: icons.document.value, onSelect: () => withFileRow(row, openEditor) }] : []),
             { label: 'Ask in chat', icon: icons.chat.value, onSelect: () => withFileRow(row, askInChat) },
-            { label: 'Download', icon: icons.download.value, onSelect: () => { void withFileRow(row, current => download(current)); } },
+            { label: row.postType === 'doc' ? 'Download as Markdown' : 'Download original', icon: icons.download.value,
+                onSelect: () => { void download(row); } },
             { label: 'Add to project', icon: icons.folder.value, disabled: busy.value || readOnly.value,
                 onSelect: () => withFileRow(row, current => { actionTarget.value = current; associationProject.value = ''; associate.value = true; }) },
         ],
@@ -819,22 +820,30 @@ watch([
 ], ([id, hash], _, onCleanup) => {
     previewSyncStatus.value = undefined;
     const origin = scope;
-    if (!origin || !cloudEnabled || !id) return;
+    if (!origin || !id) return;
     const keys = [['posts', id]];
     if (hash) keys.push(['file_meta', hash]);
     const sub = liveQuery(async () => {
-        const [operations, uploads, meta] = await Promise.all([
-            origin.db.pending_ops.where('[tableName+pk]').anyOf(keys).toArray(),
-            hash ? origin.db.file_transfers.where('[hash+direction]').equals([hash, 'upload']).toArray() : [],
+        const [operations, uploads, meta, local] = await Promise.all([
+            cloudEnabled ? origin.db.pending_ops.where('[tableName+pk]').anyOf(keys).toArray() : [],
+            cloudEnabled && hash ? origin.db.file_transfers.where('[hash+direction]').equals([hash, 'upload'])
+                .filter(transfer => transfer.workspace_id === origin.workspaceId).toArray() : [],
             hash ? origin.db.file_meta.get(hash) : undefined,
+            hash ? origin.db.file_blobs.where(':id').equals(hash).count() : 0,
         ]);
+        if (!cloudEnabled) return !hash || local ? 'Saved on this device' : 'Original not on this device';
         const pending = operations.filter(op => op.status !== 'applied' && op.status !== 'discarded');
         const transfer = uploads.sort((a, b) => b.updated_at - a.updated_at)[0];
-        if (pending.some(op => ['failed', 'failed_retryable', 'failed_permanent'].includes(op.status))) return 'Sync needs attention';
-        if (transfer?.state === 'failed') return 'Upload needs attention';
         if (transfer?.state === 'running') return 'Uploading';
-        if (pending.length || (transfer && transfer.state !== 'done')) return 'Saved locally · Waiting to sync';
-        return hash && !meta?.storage_id ? 'Saved locally' : 'Synced';
+        if (transfer?.state === 'failed') return 'Upload needs attention';
+        if (transfer?.state === 'queued' && (transfer.retry_at ?? 0) > Date.now()) return 'Upload will retry';
+        if (transfer?.state === 'paused') return local ? 'Saved locally · Upload paused' : 'Upload paused';
+        if (pending.some(op => ['failed', 'failed_retryable', 'failed_permanent'].includes(op.status))) return 'Sync needs attention';
+        if (pending.length || (transfer && transfer.state !== 'done')) {
+            return hash && !local ? 'Waiting to sync · Original not on this device' : 'Saved locally · Waiting to sync';
+        }
+        if (!hash || meta?.storage_id) return 'Synced';
+        return local ? 'Saved locally' : 'Original unavailable';
     }).subscribe({
         next: status => { if (origin === scope && selected.value?.id === id) previewSyncStatus.value = status; },
         error: () => { if (origin === scope && selected.value?.id === id) previewSyncStatus.value = undefined; },
@@ -1000,10 +1009,11 @@ async function openEditor(row: Post) {
         preview.value = false;
     } catch (caught) { error.value = fileErrorMessage(caught, 'This document could not be opened. Refresh Files and try again.'); }
 }
-async function download(row = selected.value) {
+async function download(row: Pick<Post, 'id' | 'postType'> | null = selected.value) {
     error.value = '';
+    let origin: WorkspaceOperationScope | null = null;
     try {
-        const origin = scope ?? capture();
+        origin = scope ?? capture();
         if (!row) return;
         if (row.postType === 'doc') {
             const { settleWorkspaceDocumentEditors } = await import('~/composables/documents/useDocumentEditorSessions');
@@ -1013,7 +1023,7 @@ async function download(row = selected.value) {
         }
         const current = await origin.db.posts.get(row.id);
         origin.assertCurrent();
-        if (!current || !isVisibleWorkspaceItem(current)) throw new Error('This file is unavailable.');
+        if (!current || current.postType !== row.postType || !isVisibleWorkspaceItem(current)) throw new Error('This file is unavailable.');
         if (current.postType === 'doc') {
             const { documentToMarkdown } = await import('~/utils/documents/document-to-markdown');
             const markdown = await documentToMarkdown(JSON.parse(current.content), origin.db);
@@ -1034,10 +1044,15 @@ async function download(row = selected.value) {
         const latest = await origin.db.posts.get(row.id);
         const metadata = await origin.db.file_meta.get(hash);
         origin.assertCurrent();
-        if (!latest || !isVisibleWorkspaceItem(latest) || JSON.stringify(latest) !== JSON.stringify(current)
-            || !metadata || metadata.deleted) throw new Error('This file changed. Open it again before downloading.');
-        downloadBlob(blob, current.title);
-    } catch (caught) { error.value = fileErrorMessage(caught, 'The download could not be completed. Try again.'); }
+        // A preview text update or rename must not invalidate the same immutable original.
+        if (!latest || latest.postType !== FILE_CATALOG_POST_TYPE || !isVisibleWorkspaceItem(latest)
+            || parseFileHashes(latest.file_hashes)[0] !== hash || !metadata || metadata.deleted) {
+            throw new Error('This file changed. Refresh Files before downloading again.');
+        }
+        downloadBlob(blob, latest.title);
+    } catch (caught) {
+        if (!disposed && (!origin || scope === origin)) error.value = fileErrorMessage(caught, 'The download could not be completed. Try again.');
+    }
 }
 
 let askInChatRequest = 0;
