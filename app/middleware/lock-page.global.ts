@@ -31,7 +31,7 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
     }
 
     if (access.reason === 'session-rate-limited' &&
-        from?.meta.lockPageProtected === true) {
+        from.meta.lockPageProtected === true) {
         // Keep the current surface (and its draft), but don't admit another
         // protected route from an unverified refresh.
         return abortNavigation();

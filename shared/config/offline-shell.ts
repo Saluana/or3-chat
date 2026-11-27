@@ -12,7 +12,7 @@ function scriptJson(value: unknown): string {
 /** Build a neutral SPA shell from the same Nuxt runtime config and assets as the app. */
 export function renderOfflineShell(
     manifest: Record<string, ClientChunk>,
-    config: { public: unknown; app: { baseURL: string; buildAssetsDir: string } },
+    config: { public: unknown; app?: { baseURL: string; buildAssetsDir: string } },
     hostImports: Record<string, string>,
     colorModeScript: string,
 ): string {
