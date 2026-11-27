@@ -35,7 +35,7 @@ export function useExplorerDrag(options: {
         if ((event.target as Element).closest('input, textarea, button[aria-haspopup], button[aria-expanded], [data-no-drag]')) return;
         cancel?.();
         const root = options.rootTarget?.();
-        if (root) rows.set(root, { destination: null, label: root.textContent?.trim() });
+        if (root) rows.set(root, { destination: null, label: root.textContent.trim() });
         const listeners = new AbortController();
         const capture = { capture: true, signal: listeners.signal };
         let preview: HTMLElement | undefined;
@@ -95,7 +95,7 @@ export function useExplorerDrag(options: {
                 dragging.value = true;
                 options.start(source);
                 document.documentElement.dataset.explorerDragging = 'true';
-                preview = buildPreview(sourceElement, row?.label ?? 'Move', options.count?.() ?? 1);
+                preview = buildPreview(sourceElement, row.label ?? 'Move', options.count?.() ?? 1);
                 hint = preview.querySelector<HTMLElement>('.explorer-drag-preview__hint') ?? undefined;
                 document.body.append(preview);
                 zoom = Number.parseFloat(getComputedStyle(document.body).zoom) || 1;

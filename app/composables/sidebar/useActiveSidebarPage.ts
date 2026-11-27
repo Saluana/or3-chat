@@ -116,7 +116,7 @@ export async function setActiveSidebarPage(id: string): Promise<boolean> {
     if (!process.client) return false;
     // Page-owned guards/hooks may await. Only the newest request may publish
     // selection, persistence, or rollback after those hooks finish.
-    const generation = (state.activationGeneration ?? 0) + 1;
+    const generation = state.activationGeneration + 1;
     state.activationGeneration = generation;
     const isCurrent = () => g.__or3ActiveSidebarPageState === state &&
         state.activationGeneration === generation;

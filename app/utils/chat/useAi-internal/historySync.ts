@@ -16,6 +16,8 @@ export function createHistorySynchronizer(ports: {
 }) {
     let inFlight: Promise<void> | undefined;
     let queued = false;
+    // A competing caller can queue another read while loadHistory awaits.
+    const hasQueuedRead = () => queued;
     let historyModule: Promise<typeof import('~/utils/chat/history')> | null = null;
     const loadModule = () => {
         if (!historyModule) historyModule = import('~/utils/chat/history').catch(error => {
@@ -67,9 +69,9 @@ export function createHistorySynchronizer(ports: {
                         // A failed outgoing read cannot discard a destination
                         // already waiting in this drain. Without a newer caller,
                         // retain the failure so an explicit retry can own it.
-                        if (!queued || ports.disposed()) throw error;
+                        if (!hasQueuedRead() || ports.disposed()) throw error;
                     }
-                } while (queued && !ports.disposed());
+                } while (hasQueuedRead() && !ports.disposed());
             } finally {
                 inFlight = undefined;
             }

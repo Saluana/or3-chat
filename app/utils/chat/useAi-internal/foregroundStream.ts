@@ -498,7 +498,7 @@ async function runForegroundWithRouter(ctx: ForegroundStreamContext, routerId: s
                     );
                     current.text = normalizedState.cumulativeText;
                     writeCoalescer.markDirty(utf8Bytes(delta));
-                } else if (ev.type === 'image') {
+                } else {
                     if (current.pending) current.pending = false;
                     if (ctx.assistantFileHashes.length < chatLimits.generatedImages) {
                         imageOwner.assertCurrent();
