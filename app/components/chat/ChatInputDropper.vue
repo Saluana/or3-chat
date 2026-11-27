@@ -396,6 +396,7 @@
                 v-if="modelCatalogActivated"
                 :is="$theme.activeComponents.value['model-catalog-modal']"
                 v-model:showModal="showModelCatalog"
+                @select="selectedModel = $event"
             />
             <OpenRouterKeyModal v-if="keyModalActivated" v-model:open="showKeyModal" />
         </ClientOnly>

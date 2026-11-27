@@ -14,7 +14,7 @@ On a Cloud instance, sign in if requested. The operator may supply instance cred
 
 ## 2. Choose a model and send a message
 
-Open a chat and choose a model in **Settings → Model catalog**. In a narrow chat pane, select the current model in **Settings** to switch between favorites. If you have no favorites, that control opens the catalog. Type a short prompt such as “Give me three ideas for a weekend project.” Send it using the chat input's send control. The assistant response appears incrementally while it streams.
+Open a chat and choose a model in **Settings → Model catalog**. The choice is saved for that chat; other open chats keep their own choices. In a narrow chat pane, select the current model in **Settings** to switch between favorites. If you have no favorites, that control opens the catalog. Type a short prompt such as “Give me three ideas for a weekend project.” Send it using the chat input's send control. The assistant response appears incrementally while it streams.
 
 The input clears once your message is saved, without waiting for the model to respond. If sending is blocked before the message is saved, your draft and attachments stay in the input. If the model fails after saving, retry from the saved conversation.
 

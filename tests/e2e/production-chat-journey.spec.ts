@@ -1533,6 +1533,7 @@ test('compaction media meter estimates inherited historical image cost without a
 });
 test('PageShell compaction families retain keyboard expansion and child-only search across sidebar consumers', async ({ page }, info) => {
     test.setTimeout(120_000);
+    await page.addInitScript(() => localStorage.setItem('openrouter_model_catalog_v1', JSON.stringify({ data: [{ id: 'scripted-no-tools', name: 'Scripted model without tools', context_length: 32768, supported_parameters: [], architecture: { input_modalities: ['text'], output_modalities: ['text'] } }], fetchedAt: Date.now() })));
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.route('**openrouter.ai/**', (route) => route.abort());
     await page.goto(`${chatPage}?compaction=1&presentation=1&native=1`);
@@ -1645,7 +1646,9 @@ test('PageShell compaction families retain keyboard expansion and child-only sea
     await expect(page.locator(`[data-msg-id="${root}-anchor"]`)).toHaveCount(0);
     await expect.poll(() => compactionSummaryId(page), { timeout: COMPACTION_NAVIGATION_TIMEOUT }).toBe(historySummaryId);
     const requestsBeforeManualNavigation = await page.evaluate(() => localStorage.getItem('or3:e2e:compaction-requests'));
-    await page.evaluate(() => window.dispatchEvent(new CustomEvent('or3:model-selected', { detail: { modelId: 'scripted-no-tools' } })));
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await page.getByRole('button', { name: /^Model catalog/ }).click();
+    await page.getByRole('dialog', { name: 'Model catalog', exact: true }).locator('[data-model-id="scripted-no-tools"]').getByRole('button', { name: 'Use model', exact: true }).click();
     const noToolsCard = page.locator('[data-compaction-card]');
     await noToolsCard.locator('summary').click();
     await expect(noToolsCard.getByText(/The AI cannot look up earlier messages with the current settings/)).toBeVisible();
@@ -1828,6 +1831,7 @@ test.afterEach(async ({ page }, info) => {
 
 test('native context recovery retains saved identities after reload', async ({ page }, info) => {
     test.setTimeout(120_000);
+    await page.addInitScript(() => localStorage.setItem('openrouter_model_catalog_v1', JSON.stringify({ data: [{ id: 'context-fixture-large', name: 'context-fixture-large', context_length: 1000000, supported_parameters: ['tools'], architecture: { input_modalities: ['text'], output_modalities: ['text'] } }], fetchedAt: Date.now() })));
     await page.route('**openrouter.ai/**', (route) => route.abort());
     await page.goto(`${chatPage}?context=1`);
     const input = page.getByRole('textbox', { name: 'Message input' });
@@ -1864,7 +1868,9 @@ test('native context recovery retains saved identities after reload', async ({ p
     expect(assistant.pending).toBe(false); expect(assistant.data.turn_id).toBe(savedUser.id);
     expect(failed.checkpoints[0]).toMatchObject({ user_message_id: savedUser.id, assistant_message_id: assistant.id });
     await page.reload(); await expect(input).toBeVisible();
-    await page.evaluate(() => window.dispatchEvent(new CustomEvent('or3:model-selected', { detail: { modelId: 'context-fixture-large' } })));
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await page.getByRole('button', { name: /^Model catalog/ }).click();
+    await page.getByRole('dialog', { name: 'Model catalog', exact: true }).locator('[data-model-id="context-fixture-large"]').getByRole('button', { name: 'Use model', exact: true }).click();
     const retry = page.getByRole('button', { name: 'Retry message', exact: true }).last(); await expect(retry).toBeVisible(); await retry.click();
     await expect.poll(async () => (await readAttempt()).rows.find((row) => row.id === assistant.id)?.data.content).toBe('Hello from deterministic stream.');
     const recovered = await readAttempt(); expect(recovered.checkpoints).toHaveLength(0);
@@ -3416,6 +3422,47 @@ test('Files review regressions preserve preview identity, native images, project
     await info.attach('review-files-preview', { path, contentType: 'image/png' });
 });
 
+
+test('catalog selection stays with its chat across split panes and reload', async ({ page }, info) => {
+    const models = ['pane-first', 'pane-second'].map(id => ({ id, name: id, created: 1, context_length: 32000,
+        supported_parameters: ['tools'], architecture: { input_modalities: ['text'], output_modalities: ['text'] }, pricing: { prompt: '0', completion: '0' } }));
+    await page.addInitScript(models => localStorage.setItem('openrouter_model_catalog_v1', JSON.stringify({ data: models, fetchedAt: Date.now() })), models);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`${chatPage}?workspace=1`);
+    const panes = page.locator('.chat-container-root:visible');
+    const choose = async (index: number, id: string) => {
+        await panes.nth(index).getByRole('button', { name: 'Settings', exact: true }).click();
+        await page.getByRole('button', { name: /^Model catalog/ }).click();
+        const catalog = page.getByRole('dialog', { name: 'Model catalog', exact: true });
+        await catalog.locator(`[data-model-id="${id}"]`).getByRole('button', { name: 'Use model', exact: true }).click();
+    };
+    const send = async (index: number, text: string) => {
+        await panes.nth(index).getByRole('textbox', { name: 'Message input' }).fill(text);
+        await panes.nth(index).getByRole('button', { name: 'Send message', exact: true }).click();
+        await expect(panes.nth(index).getByText(text, { exact: true })).toBeVisible();
+    };
+    await expect(panes).toHaveCount(1);
+    await choose(0, 'pane-first');
+    await send(0, 'First pane message');
+    await page.getByRole('button', { name: 'New split', exact: true }).click();
+    await expect(panes).toHaveCount(2);
+    await send(1, 'Second pane message');
+    await choose(1, 'pane-second');
+    const savedChoices = () => page.evaluate(async () => {
+        const name = (await indexedDB.databases()).find(entry => entry.name?.startsWith('or3-db'))?.name;
+        if (!name) return [];
+        const db = await new Promise<IDBDatabase>((resolve, reject) => { const request = indexedDB.open(name); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
+        const rows = await new Promise<Array<{ name: string; value: string }>>((resolve, reject) => { const request = db.transaction('current_kv').objectStore('current_kv').getAll(); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
+        db.close();
+        return rows.filter(row => row.name.startsWith('chat-model:')).map(row => JSON.parse(row.value).model).sort();
+    });
+    await expect.poll(savedChoices).toEqual(['pane-first', 'pane-second']);
+    await page.reload();
+    await expect(panes).toHaveCount(2);
+    await expect.poll(savedChoices).toEqual(['pane-first', 'pane-second']);
+    await page.screenshot({ path: info.outputPath('independent-chat-models.png'), animations: 'disabled' });
+    await info.attach('independent-chat-models', { path: info.outputPath('independent-chat-models.png'), contentType: 'image/png' });
+});
 
 test('catalog keeps platform identity, honest prices, recent choices and mobile selection', async ({ page }, info) => {
     const models = [
