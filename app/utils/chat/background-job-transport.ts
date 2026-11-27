@@ -264,7 +264,7 @@ async function readErrorMessage(
 export function isBackgroundStreamingEnabled(
     configuredEnabled?: boolean
 ): boolean {
-    if (backgroundStreamingCapabilityDisabled.value || !hasCloudAccess()) return false;
+    if (backgroundStreamingCapabilityDisabled.value || !hasCloudAccess('background')) return false;
     const configEnabled =
         configuredEnabled ??
         (

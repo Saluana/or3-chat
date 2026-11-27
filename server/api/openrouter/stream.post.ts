@@ -146,7 +146,7 @@ export default defineEventHandler(async (event) => {
     if (isSsrAuthEnabled(event)) requireCloudMutation(event);
     const modelSession = await getSession();
     if (backgroundRequested) await requireNotPaused(event, 'jobs');
-    if (backgroundRequested && modelSession) await requireCloudAccess(event, modelSession);
+    if (backgroundRequested && modelSession) await requireCloudAccess(event, modelSession, 'background');
     if (backgroundRequested && modelSession) await requireBackgroundAdmission(event, modelSession);
     if (modelSession?.authenticated && modelSession.workspace?.id && typeof body.model === 'string')
         await requireWorkspaceModel(event, modelSession.workspace.id, body.model);

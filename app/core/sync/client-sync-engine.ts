@@ -34,7 +34,7 @@ interface SyncEngineState {
     provider: SyncProvider;
     scope: SyncScope;
     hookBridge: ReturnType<typeof getHookBridge>;
-    outboxManager: OutboxManager;
+    outboxManager?: OutboxManager;
     subscriptionManager: ReturnType<typeof createSubscriptionManager>;
     stopSubscription: () => Promise<void>;
     gcManager: GcManager;
@@ -98,7 +98,7 @@ function releaseCapture(dbName: string, scope: SyncScope): void {
 }
 
 async function disposeEngine(state: SyncEngineState): Promise<void> {
-    state.outboxManager.stop();
+    state.outboxManager?.stop();
     state.gcManager.stop();
     try {
         await state.stopSubscription();
@@ -181,8 +181,11 @@ function requestEngine(scope: SyncScope | null, force = false, authorizationRevi
                 releaseCapture(db.name, scope);
                 return;
             }
-            const outboxManager = new OutboxManager(db, provider, scope);
-            outboxManager.start();
+            // Viewers subscribe normally, but must not submit local startup
+            // writes or retry previously queued edits after a role downgrade.
+            const readOnly = getCachedSessionContext()?.role === 'viewer';
+            const outboxManager = readOnly ? undefined : new OutboxManager(db, provider, scope);
+            outboxManager?.start();
             const gcManager = new GcManager(db, provider, scope);
             gcManager.start();
             engineState = { db, provider, scope, hookBridge, outboxManager,
@@ -390,11 +393,11 @@ export async function setupSyncEngine(): Promise<void> {
         },
         /** Set aside corrupt queued ops (preserved, and rebuilt from local rows where unambiguous). */
         quarantineCorruptOps: async () => {
-            return engineState?.outboxManager.quarantineCorruptOps() ?? { quarantined: 0, repaired: 0 };
+            return engineState?.outboxManager?.quarantineCorruptOps() ?? { quarantined: 0, repaired: 0 };
         },
-        getQuarantined: async () => engineState?.outboxManager.getQuarantined() ?? [],
-        exportQuarantined: async () => engineState?.outboxManager.exportQuarantined() ?? null,
-        discardQuarantined: async (id: string) => engineState?.outboxManager.discardQuarantined(id) ?? false,
+        getQuarantined: async () => engineState?.outboxManager?.getQuarantined() ?? [],
+        exportQuarantined: async () => engineState?.outboxManager?.exportQuarantined() ?? null,
+        discardQuarantined: async (id: string) => engineState?.outboxManager?.discardQuarantined(id) ?? false,
     });
 
     const dispose = () => { stopWatch(); accessScope.stop(); void stopSyncEngine(); };

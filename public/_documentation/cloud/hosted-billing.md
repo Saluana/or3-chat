@@ -98,7 +98,16 @@ local edits and local originals, without waiting for sync. Cloud-only files must
 be downloaded separately; the export page states this. Cloud restore still uses
 the authorized canonical restore path; expiry does not enable local replacement.
 
-Expired accounts cannot start new hosted mutations, uploads or background generations.
+A paid owner shares Cloud sync and file access with members of their owned
+workspaces, within each member's existing role. Viewers can read and download;
+Editors can upload against the owner's total allowance. The 50 GB default is
+one pool across the owner's workspaces, not an allowance for each workspace or
+member. This does not upgrade a member's own Free Local workspace or include
+personal background generation. When the
+owner's paid access ends, member Cloud sync and new download requests stop in
+the shared workspace; the owner can still download files and export the Cloud workspace for recovery.
+
+Outside an eligible paid shared workspace, expired accounts cannot start new hosted mutations, uploads or background generations.
 Billing, sign-in/password recovery, workspace switching, downloads, exports and
 local plugin activation, and stopping an existing generation remain available. Already-admitted generations
 may finish, and previously issued short-lived upload URLs remain valid until
