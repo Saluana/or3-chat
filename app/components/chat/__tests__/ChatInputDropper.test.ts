@@ -57,10 +57,13 @@ vi.mock('@vueuse/core', async () => {
 });
 
 const sessionRevision = ref(0);
+const mockToastAdd = vi.fn();
+const mockApiKey = ref('test-key');
+const mockProviderConnected = ref(true);
 const cloudIntake = vi.hoisted(() => ({ enabled: false, session: null as null | { authenticated: boolean; user: { id: string }; workspace: { id: string }; role: string; authorizationRevision: string; expiresAt: string }, refresh: vi.fn() }));
 // Mock other dependencies
 vi.mock('#imports', () => ({
-    useToast: () => ({ add: vi.fn(), remove: vi.fn() }),
+    useToast: () => ({ add: mockToastAdd, remove: vi.fn() }),
     useRuntimeConfig: () => ({
         public: {
             ssrAuthEnabled: cloudIntake.enabled,
@@ -68,7 +71,7 @@ vi.mock('#imports', () => ({
             limits: {},
         },
     }),
-    useUserApiKey: () => ({ apiKey: ref('test-key'), connected: ref(true) }),
+    useUserApiKey: () => ({ apiKey: mockApiKey, connected: mockProviderConnected }),
     useOpenRouterAuth: () => ({ startLogin: vi.fn() }),
     useComposerActions: () => ref([]),
     useModelStore: () => ({ 
@@ -263,6 +266,8 @@ describe('ChatInputDropper', () => {
         vi.clearAllMocks();
         cloudIntake.enabled = false;
         cloudIntake.session = null;
+        mockApiKey.value = 'test-key';
+        mockProviderConnected.value = true;
         attachmentFilter.apply = undefined;
         beforeSendAction.apply = undefined;
         editorExtensionsAction.apply = undefined;
@@ -638,6 +643,50 @@ describe('ChatInputDropper', () => {
         mockIsOverDropZone.value = false;
         await wrapper.vm.$nextTick();
         expect(root.classes()).not.toContain('border-blue-500');
+    });
+
+    it('asks to reconnect before asking for a provider key and preserves the draft', async () => {
+        const client = process.client; process.client = true;
+        const online = vi.spyOn(window.navigator, 'onLine', 'get').mockReturnValue(false);
+        mockApiKey.value = '';
+        mockProviderConnected.value = false;
+        const wrapper = mount(ChatInputDropper, {
+            props: { loading: false },
+            global: { mocks: { $theme: createThemeMock() } },
+        });
+        try {
+            await vi.waitFor(() => expect(wrapper.findComponent(EditorContent).exists()).toBe(true));
+            const editor = wrapper.getComponent(EditorContent).props('editor')!;
+            const draft = 'Keep these notes while the connection is down.';
+            (wrapper.vm as unknown as { setText: (value: string) => void }).setText(draft);
+            await flushPromises();
+            const send = wrapper.get<HTMLButtonElement>('[aria-label="Send message"]');
+            expect(send.element.disabled).toBe(false);
+            await send.trigger('click');
+            await flushPromises();
+
+            expect(mockToastAdd).toHaveBeenCalledWith(expect.objectContaining({
+                title: 'Message not sent',
+                description: 'Reconnect to send your message. Your draft is still here.',
+            }));
+            expect(mockToastAdd).not.toHaveBeenCalledWith(expect.objectContaining({ title: 'Connect to OpenRouter' }));
+            expect(wrapper.emitted('send')).toBeUndefined();
+            expect(editor.getText()).toBe(draft);
+
+            online.mockReturnValue(true);
+            window.dispatchEvent(new Event('online'));
+            await flushPromises();
+            await send.trigger('click');
+            await flushPromises();
+
+            expect(mockToastAdd).toHaveBeenLastCalledWith(expect.objectContaining({ title: 'Connect to OpenRouter' }));
+            expect(wrapper.emitted('send')).toBeUndefined();
+            expect(editor.getText()).toBe(draft);
+        } finally {
+            wrapper.unmount();
+            online.mockRestore();
+            process.client = client;
+        }
     });
 
     it('keeps text typed while an older send was being prepared, even if it is retyped to the submitted text', async () => {

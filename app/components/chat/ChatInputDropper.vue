@@ -1418,9 +1418,18 @@ async function handleSend(decision: { inspectLossyRequest?: boolean; lossyConfir
 const performSend = async (decision: { inspectLossyRequest?: boolean; lossyConfirmation?: import('~/utils/chat/lossy-request').LossyRequestPreview }, explicitText?: string): Promise<SendResult> => {
     const independent = explicitText !== undefined;
     if (props.loading) return { status: 'rejected', reason: 'busy' };
+    if (viewOnly.value) return { status: 'rejected', reason: 'unavailable' };
+    if (!online.value) {
+        return {
+            status: 'rejected',
+            reason: 'unavailable',
+            error: independent
+                ? 'Reconnect to send your message.'
+                : 'Reconnect to send your message. Your draft is still here.',
+        };
+    }
     const compatibilityMessage = independent ? toolCompatibilityMessage.value : modelCompatibilityMessage.value;
     if (compatibilityMessage) return { status: 'rejected', reason: 'client_limit', error: compatibilityMessage };
-    if (viewOnly.value) return { status: 'rejected', reason: 'unavailable' };
     // Account first: a signed-out visitor cannot use any key, so never ask for one.
     if (signInRequired.value) {
         promptSignIn();
