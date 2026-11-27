@@ -52,7 +52,7 @@ export type ErrorSource =
     | 'network'
     | 'unknown';
 export type CredentialSource = 'personal' | 'server' | 'session';
-export type RecoveryAction = 'update_key' | 'sign_in' | 'add_credits';
+export type RecoveryAction = 'update_key' | 'sign_in' | 'add_credits' | 'ai_settings';
 export interface ErrorContext {
     code?: ErrorCode;
     source?: ErrorSource;
@@ -94,8 +94,9 @@ const record = (v: unknown): Record<string, unknown> =>
     v && typeof v === 'object' ? (v as Record<string, unknown>) : {};
 const finite = (v: unknown): number | undefined =>
     typeof v === 'number' && Number.isFinite(v) ? v : undefined;
-const knownCode = (v: unknown): v is ErrorCode =>
+export const isKnownErrorCode = (v: unknown): v is ErrorCode =>
     typeof v === 'string' && Object.hasOwn(copy, v);
+const knownCode = isKnownErrorCode;
 
 /** Redacts embedded credentials before bounding any app-owned text/tag. */
 export function redactErrorText(text: string, maxLength = 400): string {
@@ -229,7 +230,10 @@ export function normalizeError(
         )
             code = source === 'provider' ? 'ERR_PROVIDER' : 'ERR_SERVER';
         else if (e.name === 'QuotaExceededError') code = 'ERR_DB_QUOTA_EXCEEDED';
-        else if (e.name === 'AbortError') code = 'ERR_ABORTED';
+        else if (e.name === 'AbortError' ||
+            (context.operation?.startsWith('chat_') &&
+                (classificationStatus === undefined || classificationStatus === 0) &&
+                record(e.cause).name === 'AbortError')) code = 'ERR_ABORTED';
         else if (
             e.name === 'TypeError' &&
             /fetch|network|load failed/i.test(String(e.message))
@@ -477,6 +481,17 @@ export function presentError(
             message = 'OR3 couldn’t confirm this message was saved. Check your draft and chat before trying again. If this started after a model change, switch back to the previous model.';
         }
     }
+    if (context.operation === 'chat_send' && (e.code === 'ERR_INTERNAL' || e.code === 'ERR_UNKNOWN')) {
+        message += ' In AI settings, you can check your OpenRouter or OpenAI connection.';
+        action = 'ai_settings';
+    }
+    if (context.operation === 'chat_send' && e.code === 'ERR_ABORTED') {
+        title = 'Message did not finish sending';
+        message = 'OR3 couldn’t confirm the message was saved. Check your draft and chat before trying again.';
+    } else if (context.operation === 'chat_reply' && e.code === 'ERR_ABORTED') {
+        title = 'Reply stopped';
+        message = 'Your message is saved. Check the conversation before deciding whether to retry.';
+    }
     const genericChatReply = context.operation === 'chat_reply'
         && (e.code === 'ERR_INTERNAL' || e.code === 'ERR_UNKNOWN' || e.code === 'ERR_STREAM_FAILURE');
     if (genericChatReply) {
@@ -486,6 +501,7 @@ export function presentError(
     if (e.router === 'openai' && e.source === 'provider' && (e.code === 'ERR_AUTH' || e.code === 'ERR_CREDITS')) {
         // OpenAI keys are managed in AI settings; OpenRouter's key and credit actions do not apply.
         title = e.code === 'ERR_AUTH' ? 'OpenAI key needed' : 'OpenAI quota exhausted';
+        action = 'ai_settings';
         message = e.code === 'ERR_CREDITS' ? 'The OpenAI account has no remaining quota. Check its billing, then try again.'
             : e.credentialSource === 'personal' ? 'Your OpenAI API key was rejected. Update it in AI settings, then try again.'
             : 'No working OpenAI key is available. Add your key in AI settings, or contact your administrator.';
@@ -524,6 +540,7 @@ export function presentError(
             'ERR_CREDITS',
             'ERR_FORBIDDEN',
             'ERR_RATE_LIMIT',
+            'ERR_ABORTED',
             'ERR_NETWORK',
             'ERR_TIMEOUT',
             'ERR_SERVER',

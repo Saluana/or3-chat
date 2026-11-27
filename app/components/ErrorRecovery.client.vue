@@ -56,7 +56,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, onMounted, onUnmounted } from 'vue';
 import { databaseRecovery } from '~/db/client';
-import { useRuntimeConfig, navigateTo } from '#imports';
+import { useRuntimeConfig, navigateTo, useRoute } from '#imports';
 import { setErrorRecoveryApi, type ErrorToastDetails } from '~/utils/errors';
 import { resolveAuthUiAdapter } from '~/core/auth-ui/registry';
 import {
@@ -77,6 +77,7 @@ async function retryDatabase() {
 }
 
 const config = useRuntimeConfig();
+const route = useRoute();
 const keyOpen = ref(false);
 const keyActivated = ref(false);
 const signInOpen = ref(false);
@@ -119,8 +120,18 @@ const labels = {
     update_key: 'Update API key',
     sign_in: 'Sign in',
     add_credits: 'Add credits',
+    ai_settings: 'AI settings',
 };
 const recovery = computed<Partial<Record<RecoveryAction, () => void>>>(() => ({
+    ...(config.public.or3?.features?.dashboard?.enabled
+        ? {
+              ai_settings: () => {
+                  // Existing dashboard hosts both providers. Stay in this pane
+                  // to leave the current draft and thread selection in place.
+                  void navigateTo({ path: route.path, hash: route.hash, query: { ...route.query, dashboard: 'core:settings', page: 'ai-settings' } }, { replace: true });
+              },
+          }
+        : {}),
     ...(canUsePersonalKey
         ? {
               update_key: () => {

@@ -52,7 +52,7 @@ describe('error toast bridge', () => {
     });
 
     it.each([
-        ['chat_send', 'Could not send message', 'OR3 couldn’t confirm this message was saved. Check your draft and chat before trying again. If this started after a model change, switch back to the previous model.'],
+        ['chat_send', 'Could not send message', 'OR3 couldn’t confirm this message was saved. Check your draft and chat before trying again. If this started after a model change, switch back to the previous model. In AI settings, you can check your OpenRouter or OpenAI connection.'],
         ['chat_reply', 'Could not get a reply', 'Your message was saved to the chat. Retry from the conversation instead of sending it again.'],
     ] as const)('makes an unclassified %s failure actionable without leaking exception text', (operation, title, description) => {
         setErrorToastApi({ add: mocks.addToast });
@@ -74,6 +74,23 @@ describe('error toast bridge', () => {
         });
 
         expect(mocks.addToast).not.toHaveBeenCalled();
+    });
+
+    it('treats a wrapped chat abort as an unconfirmed send, not a generic outage', () => {
+        const openSettings = vi.fn();
+        setErrorToastApi({ add: mocks.addToast });
+        setErrorRecoveryApi({ ai_settings: openSettings });
+        reportError(new TypeError('Fetch wrapper', { cause: new DOMException('Private text', 'AbortError') }), { operation: 'chat_send' });
+        expect(mocks.addToast.mock.lastCall?.[0]).toMatchObject({
+            title: 'Message did not finish sending',
+            description: expect.stringContaining('couldn’t confirm'),
+        });
+        reportError(new Error('Generic preparation error'), { operation: 'chat_send' });
+        const notice = mocks.addToast.mock.lastCall?.[0];
+        expect(notice?.description).toContain('OpenRouter or OpenAI');
+        const action = notice?.actions?.find((item: { label: string }) => item.label === 'AI settings');
+        action?.onClick();
+        expect(openSettings).toHaveBeenCalledOnce();
     });
 
     it('keeps one visible chat failure and exposes the latest safe delivery stage', async () => {

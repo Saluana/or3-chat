@@ -277,6 +277,7 @@ function pushToast(error: AppError, retry?: () => void, diagnostics?: Diagnostic
             update_key: 'Update API key',
             sign_in: 'Sign in',
             add_credits: 'Add credits',
+            ai_settings: 'AI settings',
         };
         if (presentation.action && errorRecoveryApi[presentation.action]) {
             const recover = errorRecoveryApi[presentation.action]!;
