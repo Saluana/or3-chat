@@ -44,6 +44,7 @@
             @focus="copyField?.select()"
         />
         <p v-if="copyStatus" role="status" class="mt-2 text-sm">{{ copyStatus }}</p>
+        <ChatDiagnosticReport v-if="details && config.public.errorReportingEnabled" :details="details" />
         <template #footer>
             <UButton v-if="showDiagnostics" variant="soft" @click="copyDiagnostics">Copy diagnostics</UButton>
             <UButton v-if="detailsAction" @click="recoverDetails">{{
@@ -65,6 +66,7 @@ import {
 } from '~~/shared/errors';
 import AppModal from '~/components/ui/AppModal.vue';
 import OpenRouterKeyModal from '~/components/chat/OpenRouterKeyModal.vue';
+import ChatDiagnosticReport from '~/components/ChatDiagnosticReport.client.vue';
 
 const retryingDatabase = ref(false);
 async function retryDatabase() {
@@ -177,7 +179,7 @@ function finishRecovery() {
 onMounted(() => {
     setErrorRecoveryApi({
         ...recovery.value,
-        detailedDiagnostics: diagnosticsEnabled,
+        detailedDiagnostics: diagnosticsEnabled || config.public.errorReportingEnabled,
         details: (metadata) => {
             manualCopy.value = false;
             copyStatus.value = '';

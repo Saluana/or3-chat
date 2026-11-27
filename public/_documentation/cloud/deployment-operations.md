@@ -474,3 +474,25 @@ identifies one browser attempt; it is not an upstream provider trace. The
 report contains no message text, API keys, raw provider data, or stack trace.
 Nothing is sent automatically. If clipboard access is unavailable, the same
 report can be selected and copied by hand.
+
+### Optional chat diagnostic inbox
+
+On a signed-in SSR deployment with a configured site administrator, set
+`NUXT_PUBLIC_ERROR_REPORTING_ENABLED=true` to offer **Preview report to site
+admin** from chat error details. Reporting is off by default. The expanded
+**Copy diagnostics** option is separate and works without sending anything.
+
+Nothing is submitted on opening, previewing, or closing the report. The sender
+must choose **Send to site admin** while online. The preview is the exact
+diagnostic payload: a random receipt ID and allowlisted error classification
+and chat stage, plus an optional app checkpoint and connection status. Reports
+do not include user IDs, text, files, links, conversation IDs, keys, or provider
+response bodies. The server authenticates and rate limits submissions by
+account; it does not store the account identity in the report.
+
+The site's super administrator can review the inbox under **Site → Chat
+reports**. Workspace administrators cannot access it. The inbox shows
+client-reported observations, not confirmed server events. It keeps up to 200
+reports from the past 30 days in the instance's admin data directory. Expired
+entries are pruned on the next successful inbox read or report submission;
+backup copies follow the deployment's backup retention.
