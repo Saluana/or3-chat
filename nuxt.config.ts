@@ -200,6 +200,22 @@ const pwaOpenRouterCallbackFallback = isStaticGenerateBuild
     : undefined;
 
 export default defineNuxtConfig({
+    // The Clerk instance may be shared with Marketplace. Change only this
+    // host's in-app sign-in heading, not the identity provider's branding.
+    ...(effectiveSsrAuthEnabled && or3CloudConfig.auth.provider === 'clerk'
+        ? {
+              clerk: {
+                  localization: {
+                      signIn: {
+                          start: {
+                              title: 'Sign in to OR3 Chat',
+                              titleCombined: 'Continue to OR3 Chat',
+                          },
+                      },
+                  },
+              },
+          }
+        : {}),
     // No first-run consent prompt; OR3 does not send usage data.
     telemetry: false,
     ...(process.env.OR3_PLUGIN_WATCH_ROOT && process.env.OR3_PLUGIN_DEV_PROFILE
