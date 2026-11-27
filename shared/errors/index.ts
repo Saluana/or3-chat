@@ -535,12 +535,12 @@ export function presentError(
     }
     if (
         context.fallbackMessage &&
+        !(e.code === 'ERR_ABORTED' && (context.operation === 'chat_send' || context.operation === 'chat_reply')) &&
         ![
             'ERR_AUTH',
             'ERR_CREDITS',
             'ERR_FORBIDDEN',
             'ERR_RATE_LIMIT',
-            'ERR_ABORTED',
             'ERR_NETWORK',
             'ERR_TIMEOUT',
             'ERR_SERVER',
