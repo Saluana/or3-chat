@@ -125,7 +125,7 @@ const labels = {
     ai_settings: 'AI settings',
 };
 const recovery = computed<Partial<Record<RecoveryAction, () => void>>>(() => ({
-    ...(config.public.or3?.features?.dashboard?.enabled
+    ...(config.public.features?.dashboard?.enabled
         ? {
               ai_settings: () => {
                   // Existing dashboard hosts both providers. Stay in this pane

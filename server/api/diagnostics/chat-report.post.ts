@@ -17,7 +17,7 @@ export default defineEventHandler(async event => {
         throw createError({ statusCode: 409, statusMessage: 'The signed-in account changed.' });
     }
     if (!await checkRateLimit(`chat-report:${session.user.id}`, { max: 6, window: 600 })) {
-        setResponseHeader(event, 'Retry-After', '600');
+        setResponseHeader(event, 'Retry-After', 600);
         throw createError({ statusCode: 429, statusMessage: 'Too many diagnostic reports.' });
     }
     const parsed = chatReportSchema.safeParse(await readLimitedJsonBody(event, 1024));
