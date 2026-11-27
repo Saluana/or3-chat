@@ -303,7 +303,27 @@ if (process.env.OR3_WORKSPACE_CLOUD_E2E === 'true') {
             await expect(preview).toContainText('Saved locally · Waiting to sync');
             await info.attach('queued-original', { body: await page.screenshot(), contentType: 'image/png' });
         } finally { await page.context().setOffline(false); }
-        await expect(page.getByRole('complementary', { name: 'File preview', exact: true })).toContainText('Synced', { timeout: 60_000 });
+        // Reconnect may close the transient preview when the workspace refreshes.
+        // Wait for the browser's original to be readable from remote storage,
+        // not for the old inspector to stay mounted or for a local text preview.
+        const hash = `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
+        await expect(async () => {
+            const response = await page.request.post('/api/storage/presign-download', {
+                headers: { origin, 'x-or3-cloud-intent': 'mutation' },
+                data: { workspace_id: workspaceId, hash, file_kind_capability: 'v1' },
+            });
+            expect(response.status(), 'remote original is registered after reconnect').toBe(200);
+            const { url } = await response.json();
+            const original = await page.request.get(url);
+            expect(original.ok(), 'storage provider serves the original').toBe(true);
+            expect(await original.body()).toEqual(bytes);
+        }).toPass({ timeout: 60_000, intervals: [500, 1_000, 2_000, 5_000] });
+
+        const syncedPreview = page.getByRole('complementary', { name: 'File preview', exact: true });
+        if (!await syncedPreview.isVisible()) {
+            await page.getByRole('button', { name: 'Open ' + name, exact: true }).click();
+        }
+        await expect(syncedPreview).toContainText('Synced');
         await info.attach('synced-original', { body: await page.screenshot(), contentType: 'image/png' });
     });
 
