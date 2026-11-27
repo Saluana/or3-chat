@@ -304,15 +304,13 @@ export function createTurnDispatch(ports: {
                     assistantMessageId: requestScope.assistantMessageId,
                 };
             }
-            const rawError = isStaleDevModuleError(err)
-                ? new Error(
-                      'The development server reloaded while this message was starting. Reload OR3, then resend the message.'
-                  )
-                : err instanceof Error
-                  ? err
-                  : new Error(String(err));
-            const visibleError = asAppError(rawError, { code: 'ERR_STREAM_FAILURE',
-                ...(isStaleDevModuleError(err) ? { fallbackMessage: 'The development server reloaded. Reload OR3, then resend your message.' } : {}),
+            const rawError = err instanceof Error ? err : new Error(String(err));
+            const visibleError = asAppError(rawError, {
+                code: 'ERR_STREAM_FAILURE',
+                operation: 'chat_reply',
+                ...(isStaleDevModuleError(err) ? {
+                    fallbackMessage: 'The development server reloaded. Reload OR3, then retry the saved message from the conversation.',
+                } : {}),
             });
             if (stopped) {
                 terminalResult = {
@@ -350,6 +348,7 @@ export function createTurnDispatch(ports: {
                 };
                 reportError(visibleError, {
                     code: 'ERR_STREAM_FAILURE',
+                    diagnostic: { checkpoint: requestScope.diagnosticCheckpoint, localRequestId: requestId },
                     tags: {
                         domain: 'chat',
                         threadId: requestThreadId,

@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { isAbsolute, resolve, sep } from 'node:path';
 import { tmpdir } from 'node:os';
+import { readFile } from 'node:fs/promises';
 import { randomUUID, createHash } from 'node:crypto';
 import { defaultProjectSettings, PROJECT_POST_TYPES } from '../../shared/projects/workspace';
 import { completeWelcomeOnboarding } from '../../scripts/release/browser-onboarding.mjs';
@@ -451,10 +452,7 @@ if (process.env.OR3_WORKSPACE_CLOUD_E2E === 'true') {
             newDevice.on('requestfailed', request => moduleFailures.push(`${request.url()} ${request.failure()?.errorText}`));
             // Exercise the actual sync plugin and palette, not a test importer.
             await newDevice.goto('/');
-            await expect(async () => {
-                await newDevice.reload();
-                await expect(newDevice.getByRole('button', { name: 'Open command palette' }).first()).toBeVisible({ timeout: 5_000 });
-            }).toPass({ timeout: 45_000 });
+            await expect(newDevice.getByRole('button', { name: 'Open command palette' }).first()).toBeVisible({ timeout: 45_000 });
             await info.attach('cloud-browser-module-loads', { body: JSON.stringify(moduleFailures), contentType: 'application/json' });
             const openPalette = async () => {
                 await expect(async () => {
@@ -497,7 +495,9 @@ if (process.env.OR3_WORKSPACE_CLOUD_E2E === 'true') {
                     email: 'member@example.test', password: 'DisposableMember!123', confirmPassword: 'DisposableMember!123',
                 } });
                 expect(registered.ok(), await registered.text()).toBe(true);
-                const memberSession = await (await member.request.get('/api/auth/session')).json();
+                const memberResponse = await member.request.get('/api/auth/session');
+                expect(memberResponse.status()).toBe(200);
+                const memberSession = await memberResponse.json();
                 const adminHeaders = { origin, 'x-or3-admin-intent': 'admin' };
                 const adminLogin = await page.request.post('/api/admin/auth/login', { headers: adminHeaders, data: {
                     username: 'workspace-e2e-admin', password: 'DisposableAdminE2e!123',
@@ -507,7 +507,28 @@ if (process.env.OR3_WORKSPACE_CLOUD_E2E === 'true') {
                     workspaceId, provider: 'basic-auth', emailOrProviderId: memberSession.session.providerUserId, role: 'viewer',
                 } });
                 expect(admitted.ok(), await admitted.text()).toBe(true);
+                const viewerPage = await member.newPage();
+                await viewerPage.setViewportSize({ width: 1440, height: 1000 });
+                await viewerPage.goto('/chat');
+                await completeWelcomeOnboarding(viewerPage);
+                const viewerFilesButton = viewerPage.getByRole('complementary', { name: 'Navigation' })
+                    .getByRole('button', { name: 'Files', exact: true });
+                await expect(viewerFilesButton).toBeVisible({ timeout: 45_000 });
                 expect((await member.request.post('/api/workspaces/active', { headers, data: { id: workspaceId } })).ok()).toBe(true);
+                await viewerPage.reload();
+                await expect(viewerFilesButton).toBeVisible({ timeout: 45_000 });
+                await viewerFilesButton.click();
+                const viewerFiles = viewerPage.getByRole('region', { name: 'Workspace Files' });
+                const rowAction = viewerFiles.getByRole('button', { name: 'More actions for Authenticated cloud proof', exact: true });
+                await expect(rowAction).toBeVisible({ timeout: 45_000 });
+                await expect(viewerFiles.getByLabel('Upload files', { exact: true })).toBeDisabled();
+                await expect(viewerFiles.getByRole('complementary', { name: 'File preview' })).toHaveCount(0);
+                await rowAction.click();
+                const downloadPromise = viewerPage.waitForEvent('download');
+                await viewerPage.getByRole('menuitem', { name: 'Download original', exact: true }).click();
+                const saved = await downloadPromise;
+                expect(await readFile((await saved.path())!)).toEqual(bytes);
+                await expect(viewerFiles.getByRole('complementary', { name: 'File preview' })).toHaveCount(0);
                 const view = await member.request.post('/api/sync/snapshot', { headers,
                     data: { ...syncHistory, scope: { workspaceId }, pageSize: 100, fileKindCapability: 'v1', workspaceItemCapability: 'v1' } });
                 expect(view.ok(), await view.text()).toBe(true);

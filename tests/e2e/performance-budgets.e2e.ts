@@ -387,7 +387,7 @@ for (const theme of ['blank', 'retro', 'cyberpunk']) for (const mode of ['light'
     });
 }
 
-async function waitForFunctionalChat(page: Page): Promise<void> {
+async function waitForFunctionalChat(page: Page, options: { expectWelcome?: boolean } = {}): Promise<void> {
     // Dev imports can still be optimizing after load; interact with the mounted
     // editor only after its visible DOM and dependency graph are ready.
     await page.waitForFunction(() =>
@@ -397,11 +397,15 @@ async function waitForFunctionalChat(page: Page): Promise<void> {
     await input.waitFor({ state: 'visible' });
     await page.waitForLoadState('networkidle');
     await expect(input).toBeVisible();
-    // The existing public preview makes the real welcome layer deterministic,
-    // including after reload, without racing its asynchronous preference read.
+    // First visits explicitly request the welcome preview. A reload restores
+    // the chat view and need not show onboarding again to test sidebar state.
     const dismiss = page.getByRole('button', { name: 'Dismiss welcome' });
-    await dismiss.waitFor({ state: 'visible' });
-    await dismiss.click();
+    if (options.expectWelcome !== false) {
+        await dismiss.waitFor({ state: 'visible' });
+    }
+    if (await dismiss.isVisible()) {
+        await dismiss.click();
+    }
     await expect(page.locator('[data-welcome-backdrop]')).toBeHidden();
 }
 
@@ -487,7 +491,7 @@ for (const scale of [80, 90, 100, 120]) for (const motion of ['no-preference', '
         expect(Math.abs(releaseError), 'a final pending update paints without a release tween').toBeLessThanOrEqual(1);
         expect(Math.abs(after.width - before.width - 108), 'screen-pixel movement is preserved at every interface scale').toBeLessThanOrEqual(1);
         await page.reload();
-        await waitForFunctionalChat(page);
+        await waitForFunctionalChat(page, { expectWelcome: false });
         await expect.poll(async () => Math.abs((await sidebar.boundingBox())!.width - after.width), 'the completed drag persists without a release/reload jump').toBeLessThanOrEqual(1);
     });
 }
@@ -511,7 +515,7 @@ test('sidebar resizing persists through collapse and responsive changes', async 
     await expect(handle).toHaveAttribute('aria-valuenow', '336');
     await expectLogicalWidth(336);
     await page.reload();
-    await waitForFunctionalChat(page);
+    await waitForFunctionalChat(page, { expectWelcome: false });
     await expect(handle).toHaveAttribute('aria-valuenow', '336');
     await expectLogicalWidth(336);
     await page.getByRole('button', { name: 'Collapse sidebar', exact: true }).click();

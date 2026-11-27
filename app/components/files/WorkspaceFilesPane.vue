@@ -35,6 +35,7 @@ import { tiptapToPlainText } from '~/core/search/command-palette/normalize';
 import { normalizeProjectData } from '~/utils/projects/normalizeProjectData';
 import { isSupportedRasterMimeType } from '~~/shared/files/file-kind';
 import { useLocalWorkspaceSession } from '~/composables/auth/useLocalWorkspaceSession';
+import { useOfflineWorkspace } from '~/composables/auth/offline-workspace';
 import { useWorkspaceFileActions } from '~/composables/files/useWorkspaceFileActions';
 import type { WorkspaceFileAction } from '~/composables/files/useWorkspaceFileActions';
 import { reportError } from '~/utils/errors';
@@ -72,6 +73,7 @@ const widePreview = computed(() => paneWidth.value >= (explorerEnabled.value ? 1
 const organization = shallowRef<Awaited<ReturnType<typeof readExplorerOrganization>>>();
 const filesWorkspace = ref(getActiveWorkspaceId() ?? 'local');
 const sessionData = useLocalWorkspaceSession();
+const offlineWorkspace = useOfflineWorkspace();
 const filesPreferenceScope = computed(() => JSON.stringify([sessionData.value?.session?.user?.id ?? 'local', filesWorkspace.value]));
 const storedFolder = useLocalStorage(computed(() => 'or3:files-explorer:folder:v1:' + filesPreferenceScope.value), '');
 const folderId = computed<string | null>({ get: () => storedFolder.value || null,
@@ -663,7 +665,8 @@ function rowActions(row: FileListRow) {
             ...(activeExplorer.value ? [moveAction] : []),
             ...(row.postType === 'doc' ? [{ label: 'Open document', icon: icons.document.value, onSelect: () => withFileRow(row, openEditor) }] : []),
             { label: 'Ask in chat', icon: icons.chat.value, onSelect: () => withFileRow(row, askInChat) },
-            { label: 'Download', icon: icons.download.value, onSelect: () => { void withFileRow(row, current => download(current)); } },
+            { label: row.postType === 'doc' ? 'Download as Markdown' : 'Download original', icon: icons.download.value,
+                onSelect: () => { void download(row); } },
             { label: 'Add to project', icon: icons.folder.value, disabled: busy.value || readOnly.value,
                 onSelect: () => withFileRow(row, current => { actionTarget.value = current; associationProject.value = ''; associate.value = true; }) },
         ],
@@ -817,22 +820,30 @@ watch([
 ], ([id, hash], _, onCleanup) => {
     previewSyncStatus.value = undefined;
     const origin = scope;
-    if (!origin || !cloudEnabled || !id) return;
+    if (!origin || !id) return;
     const keys = [['posts', id]];
     if (hash) keys.push(['file_meta', hash]);
     const sub = liveQuery(async () => {
-        const [operations, uploads, meta] = await Promise.all([
-            origin.db.pending_ops.where('[tableName+pk]').anyOf(keys).toArray(),
-            hash ? origin.db.file_transfers.where('[hash+direction]').equals([hash, 'upload']).toArray() : [],
+        const [operations, uploads, meta, local] = await Promise.all([
+            cloudEnabled ? origin.db.pending_ops.where('[tableName+pk]').anyOf(keys).toArray() : [],
+            cloudEnabled && hash ? origin.db.file_transfers.where('[hash+direction]').equals([hash, 'upload'])
+                .filter(transfer => transfer.workspace_id === origin.workspaceId).toArray() : [],
             hash ? origin.db.file_meta.get(hash) : undefined,
+            hash ? origin.db.file_blobs.where(':id').equals(hash).count() : 0,
         ]);
+        if (!cloudEnabled) return !hash || local ? 'Saved on this device' : 'Original not on this device';
         const pending = operations.filter(op => op.status !== 'applied' && op.status !== 'discarded');
         const transfer = uploads.sort((a, b) => b.updated_at - a.updated_at)[0];
-        if (pending.some(op => ['failed', 'failed_retryable', 'failed_permanent'].includes(op.status))) return 'Sync needs attention';
-        if (transfer?.state === 'failed') return 'Upload needs attention';
         if (transfer?.state === 'running') return 'Uploading';
-        if (pending.length || (transfer && transfer.state !== 'done')) return 'Saved locally · Waiting to sync';
-        return hash && !meta?.storage_id ? 'Saved locally' : 'Synced';
+        if (transfer?.state === 'failed') return 'Upload needs attention';
+        if (transfer?.state === 'queued' && (transfer.retry_at ?? 0) > Date.now()) return 'Upload will retry';
+        if (transfer?.state === 'paused') return local ? 'Saved locally · Upload paused' : 'Upload paused';
+        if (pending.some(op => ['failed', 'failed_retryable', 'failed_permanent'].includes(op.status))) return 'Sync needs attention';
+        if (pending.length || (transfer && transfer.state !== 'done')) {
+            return hash && !local ? 'Waiting to sync · Original not on this device' : 'Saved locally · Waiting to sync';
+        }
+        if (!hash || meta?.storage_id) return 'Synced';
+        return local ? 'Saved locally' : 'Original unavailable';
     }).subscribe({
         next: status => { if (origin === scope && selected.value?.id === id) previewSyncStatus.value = status; },
         error: () => { if (origin === scope && selected.value?.id === id) previewSyncStatus.value = undefined; },
@@ -998,10 +1009,11 @@ async function openEditor(row: Post) {
         preview.value = false;
     } catch (caught) { error.value = fileErrorMessage(caught, 'This document could not be opened. Refresh Files and try again.'); }
 }
-async function download(row = selected.value) {
+async function download(row: Pick<Post, 'id' | 'postType'> | null = selected.value) {
     error.value = '';
+    let origin: WorkspaceOperationScope | null = null;
     try {
-        const origin = scope ?? capture();
+        origin = scope ?? capture();
         if (!row) return;
         if (row.postType === 'doc') {
             const { settleWorkspaceDocumentEditors } = await import('~/composables/documents/useDocumentEditorSessions');
@@ -1011,7 +1023,7 @@ async function download(row = selected.value) {
         }
         const current = await origin.db.posts.get(row.id);
         origin.assertCurrent();
-        if (!current || !isVisibleWorkspaceItem(current)) throw new Error('This file is unavailable.');
+        if (!current || current.postType !== row.postType || !isVisibleWorkspaceItem(current)) throw new Error('This file is unavailable.');
         if (current.postType === 'doc') {
             const { documentToMarkdown } = await import('~/utils/documents/document-to-markdown');
             const markdown = await documentToMarkdown(JSON.parse(current.content), origin.db);
@@ -1032,10 +1044,15 @@ async function download(row = selected.value) {
         const latest = await origin.db.posts.get(row.id);
         const metadata = await origin.db.file_meta.get(hash);
         origin.assertCurrent();
-        if (!latest || !isVisibleWorkspaceItem(latest) || JSON.stringify(latest) !== JSON.stringify(current)
-            || !metadata || metadata.deleted) throw new Error('This file changed. Open it again before downloading.');
-        downloadBlob(blob, current.title);
-    } catch (caught) { error.value = fileErrorMessage(caught, 'The download could not be completed. Try again.'); }
+        // A preview text update or rename must not invalidate the same immutable original.
+        if (!latest || latest.postType !== FILE_CATALOG_POST_TYPE || !isVisibleWorkspaceItem(latest)
+            || parseFileHashes(latest.file_hashes)[0] !== hash || !metadata || metadata.deleted) {
+            throw new Error('This file changed. Refresh Files before downloading again.');
+        }
+        downloadBlob(blob, latest.title);
+    } catch (caught) {
+        if (!disposed && (!origin || scope === origin)) error.value = fileErrorMessage(caught, 'The download could not be completed. Try again.');
+    }
 }
 
 let askInChatRequest = 0;
@@ -1245,7 +1262,7 @@ watch(() => props.recordId, async id => {
         if (!disposed && origin === scope) { clearPreview(); error.value = fileErrorMessage(caught, 'This file could not be opened. Refresh Files and try again.'); }
     }
 });
-function resetScope() {
+function resetScope(resumePreviewId?: string) {
     if (disposed) return;
     undo.clear();
     generation++; scope = null; organization.value = undefined;
@@ -1255,15 +1272,21 @@ function resetScope() {
     associate.value = false; remove.value = false; existingCursor.value = ''; existingComplete.value = false;
     failures.value = []; uploadResult.value = ''; clearTimeout(uploadResultTimer); projects.value = []; readOnly.value = true; projectFilter.value = 'all'; actionTarget.value = null;
     organizationSubscription?.unsubscribe(); previewSubscription?.unsubscribe(); clearTimeout(resultTimer);
-    subscription?.unsubscribe(); subscription = undefined; void initialize();
+    subscription?.unsubscribe(); subscription = undefined; void initialize(resumePreviewId);
 }
 watch([
+    () => Boolean(offlineWorkspace.value),
+    () => sessionData.value?.session?.workspace?.id,
     () => sessionData.value?.session?.user?.id,
     () => sessionData.value?.session?.role,
     () => sessionData.value?.session?.authorizationRevision,
     () => sessionData.value?.session?.authenticated,
     explorerEnabled,
-], resetScope);
+], ([offline, workspace, user, role], [wasOffline, previousWorkspace, previousUser, previousRole]) => {
+    // Re-read the file under the new session before restoring its preview.
+    const sameMembership = workspace && user && workspace === previousWorkspace && user === previousUser && role === previousRole;
+    resetScope(offline !== wasOffline && sameMembership && preview.value ? selected.value?.id : undefined);
+});
 // The container query widths in the styles below (page and list).
 const LAYOUT_BREAKPOINTS = [600, 800, 1050];
 const layoutTier = (width: number) => LAYOUT_BREAKPOINTS.filter(breakpoint => width > breakpoint).length;
@@ -1292,7 +1315,7 @@ onMounted(async () => {
         });
         resizeObserver.observe(pageElement.value);
     }
-    stop = subscribeActiveWorkspaceDb(resetScope);
+    stop = subscribeActiveWorkspaceDb(() => resetScope());
     await initialize();
 });
 function observeOrganization(origin: WorkspaceOperationScope) {
@@ -1313,11 +1336,13 @@ function observeOrganization(origin: WorkspaceOperationScope) {
         },
     });
 }
-async function initialize() {
+async function initialize(resumePreviewId?: string) {
     let origin: WorkspaceOperationScope | null = null;
     try {
         scope = capture(); readOnly.value = !scope.writable;
         origin = scope;
+        if (resumePreviewId) await nextTick();
+        const initialPreview = previewGeneration;
         if (explorerEnabled.value) await importPreviewExplorerRecords(origin, filesScope);
         if (origin.writable) await catalogExistingImages(origin);
         origin.assertCurrent();
@@ -1325,9 +1350,11 @@ async function initialize() {
         if (explorerEnabled.value) observeOrganization(origin);
         await refresh();
         if (disposed || origin !== scope) return;
-        if (props.recordId) {
-            const row = await origin.db.posts.get(props.recordId);
+        const recordId = resumePreviewId ?? props.recordId;
+        if (recordId) {
+            const row = await origin.db.posts.get(recordId);
             origin.assertCurrent();
+            if (disposed || origin !== scope || (resumePreviewId && initialPreview !== previewGeneration)) return;
             if (row && isVisibleWorkspaceItem(row)) await open(row);
         }
     } catch (caught) {

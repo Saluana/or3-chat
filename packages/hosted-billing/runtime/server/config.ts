@@ -1,5 +1,10 @@
 import { resolve } from 'node:path';
 
+/** The toggle only prevents new automatic claims; it never revokes existing access. */
+export function automaticTrialsEnabled(env = process.env): boolean {
+    return env.OR3_BILLING_TRIALS_ENABLED !== 'false';
+}
+
 export interface BillingConfig {
     secretKey: string;
     webhookSecret: string;

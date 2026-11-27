@@ -4,6 +4,7 @@ import { useRuntimeConfig } from '#imports';
 import type { SessionContext } from '~/core/hooks/hook-types';
 import { getClientIp, normalizeProxyTrustConfig } from '~~/server/utils/net/request-identity';
 import type { BillingStore } from './store';
+import { automaticTrialsEnabled } from './config';
 
 /** Normalize mapped IPv4 and group IPv6 temporary addresses by their /64. */
 export function trialNetwork(input: string | null): string | null {
@@ -25,7 +26,7 @@ export function trialNetwork(input: string | null): string | null {
 }
 
 export function ensureTrial(event: H3Event, session: SessionContext, store: BillingStore): void {
-    if (!session.authenticated || !session.user?.id) return;
+    if (!automaticTrialsEnabled() || !session.authenticated || !session.user?.id) return;
     const email = session.user.email?.trim().toLowerCase() || null;
     const config = useRuntimeConfig(event);
     const ip = getClientIp(event, normalizeProxyTrustConfig(config.security.proxy));

@@ -63,8 +63,11 @@ export const STORAGE_RATE_LIMITS: Record<string, RateLimitConfig> = {
 export const AUTH_RATE_LIMITS: Record<string, RateLimitConfig> = {
     // Shared across short-code links, signup preflight, and session provisioning.
     'auth:invite': { windowMs: 60_000, maxRequests: 20 },
-    // Auth session: 60 per minute per IP
+    // Anonymous session checks retain the per-IP budget.
     'auth:session': { windowMs: 60_000, maxRequests: 60 },
+    // Bound provider verification work without a tight shared Wi-Fi budget.
+    'auth:session:verify': { windowMs: 60_000, maxRequests: 600 },
+    'auth:session:account': { windowMs: 60_000, maxRequests: 60 },
 };
 
 /**

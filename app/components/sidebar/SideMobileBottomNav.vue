@@ -266,7 +266,6 @@
 
                             <section class="more-section">
                                 <p class="more-section-label">Account</p>
-                                <!-- Same card/row anatomy as System below — not rail auth tiles. -->
                                 <div class="more-list">
                                     <button
                                         v-if="showConnectRow"
@@ -321,7 +320,7 @@
 
                                     <!--
                                       display:contents so Account .more-row is a
-                                      direct flex child of .more-list (same as System).
+                                      direct flex child of .more-list.
                                       layout prop is required — provide/inject can
                                       miss across provider package Vue copies.
                                     -->
@@ -407,71 +406,6 @@
                             </button>
                         </div>
                     </div>
-
-                    <footer v-if="!infoOpen && showSystemSection" class="more-sheet-footer">
-                        <div class="more-system">
-                            <p class="more-section-label">System</p>
-                            <div class="more-system-card more-list">
-                                <div
-                                    class="more-row more-system-mode"
-                                    role="status"
-                                    :aria-label="`${modeLabel} mode`"
-                                >
-                                    <span
-                                        class="more-row-icon more-row-icon--mode"
-                                        aria-hidden="true"
-                                    >
-                                        <UIcon :name="iconCloud" />
-                                    </span>
-                                    <span class="more-row-copy">
-                                        <span class="more-row-label"
-                                            >{{ modeLabel }} mode</span
-                                        >
-                                        <span class="more-row-desc">
-                                            {{
-                                                isSsrAuthEnabled
-                                                    ? 'Cloud services enabled'
-                                                    : 'Local-first workspace'
-                                            }}
-                                        </span>
-                                    </span>
-                                    <span
-                                        v-if="isSsrAuthEnabled"
-                                        class="more-status-badge"
-                                        >Active</span
-                                    >
-                                </div>
-
-                                <button
-                                    v-if="isSsrAuthEnabled"
-                                    type="button"
-                                    class="more-row more-system-admin"
-                                    aria-label="Open admin"
-                                    @click="openAdmin"
-                                >
-                                    <span
-                                        class="more-row-icon more-row-icon--admin"
-                                        aria-hidden="true"
-                                    >
-                                        <UIcon :name="iconShield" />
-                                    </span>
-                                    <span class="more-row-copy">
-                                        <span class="more-row-label"
-                                            >Admin</span
-                                        >
-                                        <span class="more-row-desc"
-                                            >Workspace and settings</span
-                                        >
-                                    </span>
-                                    <UIcon
-                                        :name="iconChevron"
-                                        class="more-row-chevron"
-                                        aria-hidden="true"
-                                    />
-                                </button>
-                            </div>
-                        </div>
-                    </footer>
                 </div>
             </div>
             </template>
@@ -509,7 +443,6 @@ import { useOpenRouterAuth } from '~/core/auth/useOpenrouter';
 import ConfirmDialog from '~/components/admin/ConfirmDialog.vue';
 import { state } from '~/state/global';
 import { useUserApiKey } from '~/core/auth/useUserApiKey';
-import { useSessionContext } from '~/composables/auth/useSessionContext';
 
 /** Keep nested auth menus on-screen inside the mobile More sheet. */
 provide('or3:auth-ui-popover-content', {
@@ -518,7 +451,7 @@ provide('or3:auth-ui-popover-content', {
     sideOffset: 8,
     collisionPadding: 16,
 });
-/** Auth adapters render System-matched .more-row triggers. */
+/** Auth adapters render .more-row triggers in the mobile More sheet. */
 provide('or3:auth-ui-layout', 'more-sheet');
 
 const DEFAULT_PAGE_ID = 'sidebar-home';
@@ -539,31 +472,17 @@ const iconActivity = useIcon('sidebar.activity');
 const iconCredits = useIcon('sidebar.credits');
 const iconChevron = useIcon('ui.chevron.right');
 const iconChevronLeft = useIcon('ui.chevron.left');
-const iconCloud = useIcon('ui.cloud');
-const iconShield = useIcon('ui.shield');
 
 const or3Config = useOr3Config();
 const documentsEnabled = computed(() => or3Config.features.documents.enabled);
 const dashboardEnabled = computed(() => or3Config.features.dashboard.enabled);
 
-// SSR auth flag drives info links + mode badge (mirrors SideBottomNav)
+// SSR auth chooses between provider account controls and local info links.
 const config = useRuntimeConfig();
 const isSsrAuthEnabled = computed(
     () => config.public?.ssrAuthEnabled === true
 );
 
-// System status and the admin entry are for whoever can administer this
-// deployment: the server admits workspace owners and deployment admins to
-// /admin, so everyone else would only see a link that refuses them.
-const { data: sessionData } = useSessionContext();
-const showSystemSection = computed(() => {
-    if (!isSsrAuthEnabled.value) return true;
-    const session = sessionData.value?.session;
-    return session?.authenticated === true
-        && (session.role === 'owner' || session.deploymentAdmin === true);
-});
-
-// Account adapter only (Connect is a local System-matched more-row above).
 const authProviderId = computed(() =>
     String(config.public?.authProvider ?? 'clerk')
 );
@@ -629,9 +548,6 @@ function disconnectOpenRouter() {
     state.value.openrouterKey = null;
     openrouter.logoutOpenRouter();
 }
-
-// Mode badge (Local / Cloud) — same semantics as SideBottomNav
-const modeLabel = computed(() => (isSsrAuthEnabled.value ? 'Cloud' : 'Local'));
 
 const createOpen = ref(false);
 const moreOpen = ref(false);
@@ -803,11 +719,6 @@ function navigateToActivity() {
 function navigateToCredits() {
     closeMore();
     window.open('https://openrouter.ai/settings/credits', '_blank');
-}
-
-async function openAdmin() {
-    closeMore();
-    await navigateTo('/admin');
 }
 
 /* ---------------- Theme-integrated button props ---------------- */
@@ -1076,10 +987,6 @@ const createItemProps = computed(() => {
     touch-action: pan-y;
 }
 
-.more-sheet-footer {
-    padding: 0.35rem 1rem 0.25rem;
-}
-
 .more-sheet-enter-active,
 .more-sheet-leave-active {
     pointer-events: none;
@@ -1252,33 +1159,13 @@ const createItemProps = computed(() => {
 
 /* Clean 1px dividers only — never stacked shadows between rows. */
 .more-list > * + *,
-.mobile-nav-more-auth > * + *,
-.more-system-card > * + * {
+.mobile-nav-more-auth > * + * {
     border-top: var(--md-border-width-subtle, var(--md-border-width, 1px)) solid
         color-mix(in srgb, var(--md-border-color) 70%, transparent);
     box-shadow: none;
 }
 
-.more-system {
-    display: flex;
-    flex-direction: column;
-    gap: 0.55rem;
-}
-
-/* Status row: same anatomy as actionable rows, no pointer affordance. */
-.more-system-mode {
-    cursor: default;
-}
-
-.more-system-mode:hover,
-.more-system-mode:active {
-    background: transparent;
-}
-
-/*
- * Collapse the auth host wrapper so Account/Login .more-row participates in
- * .more-list dividers exactly like System rows (Cloud mode / Admin).
- */
+/* Let provider account rows participate directly in the list dividers. */
 .mobile-nav-more-auth {
     display: contents;
 }
@@ -1287,7 +1174,7 @@ const createItemProps = computed(() => {
 <!--
   Unscoped on purpose: Account auth adapters render .more-row inside child
   components. Scoped parent styles never reach those nodes — that was the
-  mashed Connect text / giant Account rail tile. System rows use the same classes.
+  mashed Connect text / giant Account rail tile.
 -->
 <style>
 .more-row {
@@ -1329,11 +1216,6 @@ const createItemProps = computed(() => {
 }
 
 .more-row-icon--info {
-    background: color-mix(in srgb, var(--md-primary) 12%, transparent);
-    color: var(--md-primary);
-}
-
-.more-row-icon--mode {
     background: color-mix(in srgb, var(--md-primary) 12%, transparent);
     color: var(--md-primary);
 }
@@ -1389,30 +1271,12 @@ const createItemProps = computed(() => {
     font-weight: 600;
 }
 
-.more-row-chevron,
-.more-status-badge {
+.more-row-chevron {
     flex-shrink: 0;
     margin-left: auto;
-}
-
-.more-row-chevron {
     width: 0.95rem;
     height: 0.95rem;
     opacity: 0.35;
-}
-
-.more-status-badge {
-    padding: 0.2rem 0.55rem;
-    border-radius: 9999px;
-    background: color-mix(
-        in srgb,
-        var(--md-success, var(--md-primary)) 14%,
-        transparent
-    );
-    color: var(--md-success, var(--md-primary));
-    font-size: 0.68rem;
-    font-weight: 700;
-    letter-spacing: 0.02em;
 }
 
 /* Provider account menus are portalled to <body>. Their popper wrapper must

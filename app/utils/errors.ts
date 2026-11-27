@@ -187,9 +187,68 @@ export type ErrorToastApi = {
 };
 
 let errorToastApi: ErrorToastApi | null = null;
-type ErrorRecoveryApi = Partial<Record<RecoveryAction, () => void>> & {
-    details?: (error: ErrorMetadata) => void;
+const diagnosticCheckpoints = [
+    'prepare_conversation', 'check_model', 'prepare_model_request',
+    'save_message', 'start_reply', 'receive_reply',
+] as const;
+export type DiagnosticCheckpoint = (typeof diagnosticCheckpoints)[number];
+
+const diagnosticExceptionNames = new Set([
+    'AbortError', 'ConstraintError', 'DataCloneError', 'DatabaseClosedError',
+    'InvalidStateError', 'NetworkError', 'NotReadableError', 'QuotaExceededError',
+    'SecurityError', 'TimeoutError', 'TransactionInactiveError', 'TypeError',
+    'UnknownError', 'VersionError',
+]);
+type DiagnosticHints = {
+    checkpoint?: DiagnosticCheckpoint;
+    localRequestId?: string;
 };
+type DiagnosticContext = {
+    capturedAt: string;
+    operation?: ErrorContext['operation'];
+    checkpoint?: DiagnosticCheckpoint;
+    localRequestId?: string;
+    exceptionType?: string;
+    online?: boolean;
+    pageVisibility?: 'visible' | 'hidden';
+};
+
+export type ErrorToastDetails = ErrorMetadata & {
+    // Comes from app-owned request lifecycle, never from provider metadata.
+    chatStage?: 'before_save_confirmation' | 'after_save';
+    diagnostics?: DiagnosticContext;
+};
+type ErrorRecoveryApi = Partial<Record<RecoveryAction, () => void>> & {
+    details?: (error: ErrorToastDetails) => void;
+    detailedDiagnostics?: boolean;
+};
+
+function captureDiagnostics(input: unknown, hints: DiagnosticHints | undefined, operation: ErrorContext['operation']): DiagnosticContext {
+    // Never use error messages, stacks, tags, URLs, provider bodies, or IDs
+    // supplied by exceptions as diagnostic fields. Capture only these facts.
+    const result: DiagnosticContext = { capturedAt: new Date().toISOString() };
+    if (operation === 'chat_send' || operation === 'chat_reply' || operation === 'login') result.operation = operation;
+    if (hints?.checkpoint && diagnosticCheckpoints.includes(hints.checkpoint)) result.checkpoint = hints.checkpoint;
+    const requestId = hints?.localRequestId;
+    if (typeof requestId === 'string' && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(requestId))
+        result.localRequestId = requestId;
+    let cause = input;
+    try {
+        // DOMException and Dexie can come from a different JavaScript realm.
+        for (let i = 0; i < 4 && cause && typeof cause === 'object'; i++) {
+            const { name, cause: next } = cause as { name?: unknown; cause?: unknown };
+            if (typeof name === 'string' && diagnosticExceptionNames.has(name)) {
+                result.exceptionType = name;
+                break;
+            }
+            cause = next;
+        }
+    } catch { /* Exotic exceptions must not prevent the user-facing notice. */ }
+    if (typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean') result.online = navigator.onLine;
+    const visibility = (globalThis as { document?: { visibilityState?: string } }).document?.visibilityState;
+    if (visibility === 'visible' || visibility === 'hidden') result.pageVisibility = visibility;
+    return result;
+}
 let errorRecoveryApi: ErrorRecoveryApi = {};
 export function setErrorRecoveryApi(api: ErrorRecoveryApi): void {
     errorRecoveryApi = api;
@@ -205,19 +264,20 @@ export function setErrorToastApi(api: ErrorToastApi | null): void {
 }
 
 // Use Nuxt UI toast directly; no custom store.
-function pushToast(error: AppError, retry?: () => void) {
+function pushToast(error: AppError, retry?: () => void, diagnostics?: DiagnosticContext) {
     const toast = errorToastApi;
     if (!toast) return;
     try {
-        const presentation = presentError(error, {
-            ...trustedErrorContexts.get(error),
-            fallbackMessage: error.message,
-        });
+        const context = trustedErrorContexts.get(error);
+        const chatStage = context?.operation === 'chat_send' ? 'before_save_confirmation'
+            : context?.operation === 'chat_reply' ? 'after_save' : undefined;
+        const presentation = presentError(error, context);
         const actions: ToastAction[] = [];
         const labels = {
             update_key: 'Update API key',
             sign_in: 'Sign in',
             add_credits: 'Add credits',
+            ai_settings: 'AI settings',
         };
         if (presentation.action && errorRecoveryApi[presentation.action]) {
             const recover = errorRecoveryApi[presentation.action]!;
@@ -245,10 +305,17 @@ function pushToast(error: AppError, retry?: () => void) {
             actions.push({
                 label: 'Details',
                 onClick: () => {
-                    errorRecoveryApi.details?.(errorDiagnostics(error));
+                    errorRecoveryApi.details?.({
+                        ...errorDiagnostics(error),
+                        ...(chatStage ? { chatStage } : {}),
+                        ...(errorRecoveryApi.detailedDiagnostics && diagnostics ? { diagnostics } : {}),
+                    });
                 },
             });
         toast.add({
+            // Nuxt UI merges the latest alert into this slot, including new
+            // recovery actions. Other error categories keep separate notices.
+            ...(chatStage ? { id: 'or3-chat-delivery-error' } : {}),
             title: presentation.title,
             description: presentation.message,
             actions: actions.length ? actions : undefined,
@@ -274,6 +341,8 @@ export interface ReportOptions extends ErrorContext {
     toast?: boolean; // override the severity-based toast default
     silent?: boolean; // never show toast
     retry?: () => void; // optional retry closure
+    /** App-owned local context; never set from provider response payloads. */
+    diagnostic?: DiagnosticHints;
     severity?: ErrorSeverity; // override severity if wrapping non-error
     retryable?: boolean; // override retryable
 }
@@ -343,7 +412,10 @@ export function reportError(
             shouldToast &&
             !(e.code === 'ERR_STREAM_ABORTED' && e.severity === 'info')
         ) {
-            pushToast(e, opts.retry);
+            const diagnostics = errorRecoveryApi.detailedDiagnostics
+                ? captureDiagnostics(input, opts.diagnostic, trustedErrorContexts.get(e)?.operation)
+                : undefined;
+            pushToast(e, opts.retry, diagnostics);
         }
         return e;
     } catch (inner) {

@@ -241,6 +241,7 @@ export function createNativeExecution(ports: {
                         signal: requestScope.abortController.signal,
                     });
                     requestScope.jobId = result.jobId;
+                    requestScope.diagnosticCheckpoint = 'receive_reply';
                     if (ownsCurrentView(requestScope) && !isRequestCancelled(requestScope)) publishRequest(requestScope, {
                         status: 'streaming', requestId, userMessageId: userDbMsg.id,
                         assistantMessageId: assistantDbMsg.id, providerAccepted: true });
@@ -491,6 +492,7 @@ export function createNativeExecution(ports: {
                         ? foregroundToolDefs
                         : undefined,
                 onProviderAccepted: () => {
+                    requestScope.diagnosticCheckpoint = 'receive_reply';
                     nativeRecoveryCandidates.accepted(requestScope);
                     if (ownsCurrentView(requestScope) && !isRequestCancelled(requestScope)) publishRequest(requestScope, {
                         status: 'streaming', requestId, userMessageId: userDbMsg.id,
@@ -668,15 +670,13 @@ export function createNativeExecution(ports: {
                     assistantMessageId: requestScope.assistantMessageId,
                 };
             }
-            const rawError = isStaleDevModuleError(err)
-                ? new Error(
-                      'The development server reloaded while this message was starting. Reload OR3, then resend the message.'
-                  )
-                : err instanceof Error
-                  ? err
-                  : new Error(String(err));
-            const visibleError = asAppError(rawError, { code: 'ERR_STREAM_FAILURE',
-                ...(isStaleDevModuleError(err) ? { fallbackMessage: 'The development server reloaded. Reload OR3, then resend your message.' } : {}),
+            const rawError = err instanceof Error ? err : new Error(String(err));
+            const visibleError = asAppError(rawError, {
+                code: 'ERR_STREAM_FAILURE',
+                operation: 'chat_reply',
+                ...(isStaleDevModuleError(err) ? {
+                    fallbackMessage: 'The development server reloaded. Reload OR3, then retry the saved message from the conversation.',
+                } : {}),
             });
             if (stopped) {
                 terminalResult = {
@@ -714,6 +714,7 @@ export function createNativeExecution(ports: {
                 };
                 reportError(visibleError, {
                     code: 'ERR_STREAM_FAILURE',
+                    diagnostic: { checkpoint: requestScope.diagnosticCheckpoint, localRequestId: requestId },
                     tags: {
                         domain: 'chat',
                         threadId: requestThreadId,

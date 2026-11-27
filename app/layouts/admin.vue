@@ -394,6 +394,9 @@ const navLinks = computed<NavLink[]>(() => {
         base.push(
             { label: 'Overview', to: '/admin', icon: homeIcon.value, section: 'Site' },
             { label: 'Customers', to: '/admin/customers', icon: 'i-lucide-users', section: 'Site' },
+            ...(runtimeConfig.public.errorReportingEnabled
+                ? [{ label: 'Chat reports', to: '/admin/chat-reports', icon: 'i-lucide-message-circle-warning', section: 'Site' }]
+                : []),
             { label: 'Registration', to: '/admin/registration', icon: 'i-lucide-user-plus', section: 'Site' },
             { label: 'Administrators', to: '/admin/admin-users', icon: 'i-lucide-shield', section: 'Site' },
             { label: 'Workspaces', to: '/admin/workspaces', icon: workspacesIcon.value, section: 'Site' },

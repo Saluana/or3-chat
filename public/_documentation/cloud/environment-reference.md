@@ -46,6 +46,7 @@ they are not application configuration.
 | `OR3_SYNC_PROVIDER` | `convex` | Sync backend (`sqlite`, `convex`, `firebase`, or a registered provider). |
 | `OR3_CLOUD_STORAGE_ENABLED` / `OR3_STORAGE_ENABLED` | enabled when auth is enabled | Enables server storage. Set either key to `false` to disable it. |
 | `NUXT_PUBLIC_STORAGE_PROVIDER` | `convex` | Storage backend (`fs`, `convex`, `s3`, or a registered provider). |
+| `OR3_BILLING_TRIALS_ENABLED` | `true` | Set to `false` to stop new automatic hosted billing trials. Existing trials, paid access and support grants are unchanged. |
 | `OR3_STRICT_CONFIG` | production-only | Enables strict configuration validation in non-production environments. |
 
 Static builds (`bun run generate:static`) do not provide SSR auth, server

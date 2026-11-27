@@ -710,7 +710,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 13,
-                    "summary": "S3 and Hippius setup, bounded server requests and retries, verified transfers, dormant immutable generations and coordinated cleanup, retained quotas, offline SHA-256 backup preparation, and qualification."
+                    "summary": "S3 and Hippius setup, exact-origin CORS and production release checks, bounded server retries, verified transfers, dormant immutable generations and coordinated cleanup, retained quotas, offline SHA-256 backup preparation, and qualification."
                 },
                 {
                     "name": "deployment-operations.md",
@@ -719,7 +719,7 @@
                     "category": "Operations",
                     "categoryOrder": 3,
                     "order": 14,
-                    "summary": "Managed operations with recorded operator handoff recovery and verified receipts, health-only update admission, explicit destructive recovery, qualified published 0.1.116 complete-032 snapshot rollback and exact-image verification warnings, pinned abandoned histories, fresh re-upgrade identity, and exact SQLite 0.0.31 candidate capability with mandatory image/browser qualification before promotion; schema-2 bundled dashboard compatibility and pinned CLI recovery."
+                    "summary": "Managed operations with recorded operator handoff recovery and verified receipts, health-only update admission, explicit destructive recovery, qualified published 0.1.116 complete-032 snapshot rollback and exact-image verification warnings, pinned abandoned histories, fresh re-upgrade identity, and exact SQLite 0.0.31 candidate capability with mandatory image/browser qualification before promotion; schema-2 bundled dashboard compatibility, pinned CLI recovery, and optional chat diagnostic reports."
                 },
                 {
                     "name": "troubleshooting.md",

@@ -7,6 +7,7 @@ type TestRoute = {
 };
 
 const navigateToMock = vi.fn((target: unknown, _options?: unknown) => target);
+const abortNavigationMock = vi.fn(() => false);
 const resolveLockPageAccessMock = vi.fn();
 const useLockPageRuntimeConfigMock = vi.fn();
 const isAdminRouteMock = vi.fn();
@@ -15,6 +16,7 @@ const sanitizeLockPageRedirectTargetMock = vi.fn(
 );
 
 vi.mock('#app', () => ({
+    abortNavigation: abortNavigationMock,
     defineNuxtRouteMiddleware: (handler: unknown) => handler,
     navigateTo: (target: unknown, options?: unknown) =>
         navigateToMock(target, options),
@@ -35,6 +37,7 @@ describe('lock-page middleware', () => {
     beforeEach(() => {
         vi.resetModules();
         navigateToMock.mockClear();
+        abortNavigationMock.mockClear();
         resolveLockPageAccessMock.mockReset();
         useLockPageRuntimeConfigMock.mockReset();
         isAdminRouteMock.mockReset();
@@ -115,6 +118,24 @@ describe('lock-page middleware', () => {
             middleware({ path: '/chat', fullPath: '/chat', meta: { lockPageProtected: true } })
         ).resolves.toBeUndefined();
         expect(navigateToMock).not.toHaveBeenCalled();
+    });
+
+    it('keeps an already opened app route without admitting another while a check is throttled', async () => {
+        resolveLockPageAccessMock.mockResolvedValue({
+            allowed: false,
+            reason: 'session-rate-limited',
+            session: { authenticated: true },
+        });
+        const middleware = (await import('../lock-page.global')).default as (
+            to: TestRoute, from: TestRoute
+        ) => Promise<unknown>;
+        const current = { path: '/chat', fullPath: '/chat', meta: { lockPageProtected: true } };
+        const destination = { path: '/billing', fullPath: '/billing', meta: { lockPageProtected: true } };
+        await expect(middleware(destination, current)).resolves.toBe(false);
+        expect(navigateToMock).not.toHaveBeenCalled();
+
+        const initial = { path: '/', fullPath: '/', meta: {} };
+        await expect(middleware(destination, initial)).resolves.toEqual({ path: '/welcome', query: { next: '/billing' } });
     });
 
     it('redirects denied visitors to the lock page with next query', async () => {

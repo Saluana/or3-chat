@@ -5,22 +5,7 @@
         :data-keyboard-open="keyboardOpen || undefined"
         class="resizable-sidebar-layout relative w-full h-dvh [container:app-viewport/size] overflow-hidden bg-(--md-surface) text-(--md-on-surface) flex overflow-x-hidden"
     >
-        <!-- Backdrop (mobile) -->
-        <Transition
-            enter-active-class="transition-opacity duration-150"
-            leave-active-class="transition-opacity duration-150"
-            enter-from-class="opacity-0"
-            leave-to-class="opacity-0"
-        >
-            <div
-                v-show="!isDesktop && open"
-                id="mobile-close"
-                class="absolute inset-0 bg-black/40 z-[60] md:hidden"
-                @click="close()"
-            />
-        </Transition>
-
-        <!-- Sidebar -->
+        <!-- On mobile the full-width sidebar covers the chat without a backdrop. -->
         <aside
             id="sidebar"
             ref="sidebarElement"

@@ -47,6 +47,23 @@ describe('trial eligibility', () => {
         expect(store.account('paid').trial_ends_at).toBe(0);
     });
 
+    it('does not start new automatic trials when disabled and preserves existing trials', () => {
+        const event = { node: { req: { headers: {}, socket: { remoteAddress: '192.0.2.1' } } } } as H3Event;
+        const session = { authenticated: true, user: { id: 'new', email: 'new@example.test' } } as SessionContext;
+        const expiry = Date.now() + 86_400_000;
+        store.db.prepare('INSERT INTO billing_accounts (user_id, trial_ends_at) VALUES (?, ?)').run('existing', expiry);
+        vi.stubEnv('OR3_BILLING_TRIALS_ENABLED', 'false');
+        try {
+            vi.mocked(useRuntimeConfig).mockReturnValue({ security: { proxy: {} } } as never);
+            ensureTrial(event, session, store);
+            expect(store.status('new')).toMatchObject({ allowed: false, trialEndsAt: 0 });
+            expect(store.status('existing')).toMatchObject({ allowed: true, trialEndsAt: expiry });
+        } finally {
+            vi.unstubAllEnvs();
+            vi.mocked(useRuntimeConfig).mockReset();
+        }
+    });
+
     it('normalizes IPv4-mapped addresses and IPv6 privacy addresses', () => {
         expect(trialNetwork('::ffff:192.0.2.1')).toBe(trialNetwork('192.0.2.1'));
         expect(trialNetwork('2001:db8:0:1::abcd')).toBe(trialNetwork('2001:db8:0:1::1234'));

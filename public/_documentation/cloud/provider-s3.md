@@ -98,6 +98,48 @@ origin rather than assuming it is active.
 require a signed checksum and `Content-Length`. New SHA-256 uploads use
 `x-amz-checksum-sha256`; legacy MD5 uploads use `Content-MD5`.
 
+### Direct transfers on Hippius
+
+For Hippius, use the S3 endpoint with region `decentralized` and path-style
+addressing. Preserve existing bucket CORS rules and allow the exact OR3 HTTPS
+origin. For the November 26, 2026 staging check, the rule allowed GET, PUT and
+HEAD; Content-Type, Content-MD5, x-amz-checksum-sha256 and Range; and exposed
+ETag, Content-Length and Content-Range. Verify the rule readback and a signed
+browser preflight for the actual deployment. A successful policy write is not
+proof the gateway uses the policy.
+
+Private staging verified direct browser upload and download with exact original
+bytes, including a 104 MiB ZIP through the Files screen. A later run committed
+a 130 MB ZIP in the UI and verified the original via the authenticated download
+endpoint. Neither test qualifies a production bucket or physical iOS.
+Workspace metadata can sync even if the original upload fails.
+
+#### Production release gate for direct transfers
+
+Use a separate private production bucket and server-only credentials scoped
+as narrowly as the provider supports. Keep public access blocked and allow
+only the actual production HTTPS origin and required methods and headers.
+Do not include a staging origin or wildcard. CORS is a browser control, not
+authorization; OR3 must check workspace permissions on every signing request.
+
+Before allowing real user files, repeat these checks on the exact production
+build and bucket with disposable fixtures:
+
+- The authorized workspace can upload and download matching bytes, including
+  a file over 100 MB. An unlisted browser origin fails the signed preflight.
+- A signed-out caller and a distinct, signed-in non-member do not receive a
+  signed download or upload grant. Verify that the owner's grant still works
+  with the same fixture; an outage is not evidence of isolation.
+- The direct object URL without a signature is denied. The same signed link
+  works before expiry and is denied after expiry, without relying on browser
+  CORS for the denial. Review the server-enforced maximum link lifetime.
+- The app and edge do not cache signing responses. Check that request and
+  error logs, telemetry and shared traces never contain live signed URLs.
+  Treat a signed URL as a credential that can be replayed until it expires.
+- If a required check fails, keep production cloud file transfers disabled
+  until corrected. Re-run the gate after changes to the provider, origin,
+  credential scope, signing code, or shared cache policy.
+
 ## How it works
 
 Server-side S3 calls have a 2-second connection timeout and a 5-second response

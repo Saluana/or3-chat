@@ -804,6 +804,8 @@ export function useChat(
             if (!stopped && !contextAdmissionFailureReason(error)) reportError(error, {
                 severity: 'error',
                 tags: { domain: 'chat', stage: 'send' },
+                operation: requestScope.userMessageId ? 'chat_reply' : 'chat_send',
+                diagnostic: { checkpoint: requestScope.diagnosticCheckpoint, localRequestId: requestId },
                 toast: true,
             });
         } finally {
@@ -875,6 +877,7 @@ export function useChat(
             persistedUserText, contextOmission } = preparation.turn;
         const { resolveChatProject, initialProjectId, projectAttachmentScope, projectExtractionScope } = preparation.project;
         const { chatToolPreferences } = preparation.model;
+        requestScope.diagnosticCheckpoint = 'save_message';
         const toolPreferenceKey = chatToolPreferenceKey(admissionThreadId);
         const { row: savedTools } = await getKvRecordByName(toolPreferenceKey, requestScope.originDb);
         if (!savedTools?.value) await setKvByName(toolPreferenceKey, JSON.stringify(chatToolPreferences), requestScope.originDb, {
@@ -890,6 +893,7 @@ export function useChat(
         });
         if ('result' in accepted) return accepted.result;
         const { userDbMsg, assistantDbMsg, requestThreadId, stopAcceptanceHeartbeat } = accepted;
+        requestScope.diagnosticCheckpoint = 'start_reply';
         try { return await dispatchTurn(requestScope, preparation, userDbMsg, assistantDbMsg, requestThreadId, stopAcceptanceHeartbeat); }
         finally { stopAcceptanceHeartbeat(); }
     }

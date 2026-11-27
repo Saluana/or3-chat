@@ -141,6 +141,39 @@ describe('useSessionContext refresh generations', () => {
         expect(second.data.value).toEqual(payload);
     });
 
+    it.each(['refresh', 'head prefetch'] as const)(
+        'retains the workspace and respects Retry-After from %s',
+        async (initial) => {
+            vi.useFakeTimers();
+            const cached = { session: { authenticated: true, workspace: { id: 'accepted' } }, appAccessAllowed: true };
+            sessionState.value = cached;
+            const response = new Response(null, { status: 429, headers: { 'Retry-After': '7' } });
+            let requestsBeforeRetry = 1;
+            if (initial === 'head prefetch') {
+                const { BOOT_SESSION_SCRIPT } = await import('~/utils/boot-session');
+                new Function('fetch', BOOT_SESSION_SCRIPT)(async () => response);
+                requestsBeforeRetry = 0;
+            } else {
+                fetchMock.mockRejectedValueOnce(Object.assign(new Error('rate limited'), {
+                    status: 429,
+                    response,
+                }));
+            }
+            fetchMock.mockResolvedValue(cached);
+            const { useSessionContext } = await import('../useSessionContext');
+            const context = useSessionContext({ autoLoad: false });
+
+            await expect(context.refresh()).rejects.toMatchObject({ response: { headers: response.headers } });
+            await vi.advanceTimersByTimeAsync(6_999);
+            await expect(context.refresh()).rejects.toMatchObject({ response: { headers: response.headers } });
+            expect(fetchMock).toHaveBeenCalledTimes(requestsBeforeRetry);
+            expect(context.data.value).toEqual(cached);
+            await vi.advanceTimersByTimeAsync(1);
+            await expect(context.refresh()).resolves.toEqual(cached);
+            expect(fetchMock).toHaveBeenCalledTimes(requestsBeforeRetry + 1);
+        }
+    );
+
     it('keeps a reload-bound session out of the shared state', async () => {
         const payload = {
             session: { authenticated: true, workspace: { id: 'signed-in' } },

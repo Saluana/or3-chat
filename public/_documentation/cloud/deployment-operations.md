@@ -457,3 +457,44 @@ with “qualified to write schema 1” after state has reached schema 2. Use the
 pinned 0.1.129 CLI for recovery and upgrade; preserve managed state and backups.
 The corrected installed bundle retains its schema-2 writer qualification without
 an npm manifest and still refuses unknown future schemas.
+
+
+## Copyable error details in development and staging
+
+On an error notice, open **Details**, then choose **Copy diagnostics**. The
+expanded report is automatic in local development. On a staging SSR server set
+\`NUXT_PUBLIC_ERROR_DIAGNOSTICS_ENABLED=true\`. For a staging Docker image, pass
+\`--build-arg OR3_ERROR_DIAGNOSTICS_ENABLED=true\` so the setting is available in
+the built offline shell as well. The default for production builds is off.
+
+An expanded report can include the classified error, the last chat step
+entered, a local request ID, the time, an allowlisted exception type, and
+whether the browser reported being online and visible. The local request ID
+identifies one browser attempt; it is not an upstream provider trace. The
+report contains no message text, API keys, raw provider data, or stack trace.
+Nothing is sent automatically. If clipboard access is unavailable, the same
+report can be selected and copied by hand.
+
+### Optional chat diagnostic inbox
+
+On a signed-in SSR deployment with a configured site administrator, set
+`NUXT_PUBLIC_ERROR_REPORTING_ENABLED=true` to offer **Preview report to site
+admin** from chat error details. Reporting is off by default. The expanded
+**Copy diagnostics** option is separate and works without sending anything.
+
+Nothing is submitted on opening, previewing, or closing the report. The sender
+must choose **Send to site admin** while online. The preview is the exact
+diagnostic payload: a random receipt ID, this site's release version, the
+classification and chat stage, and an optional app checkpoint and connection
+status. When captured, a local request ID identifies the app's chat attempt; it
+is not the report receipt ID or a verified provider/server trace. Reports
+do not include user IDs, text, files, links, conversation IDs, keys, or provider
+response bodies. The server authenticates and rate limits submissions by
+account; it does not store the account identity in the report.
+
+The site's super administrator can review the inbox under **Site → Chat
+reports**. Workspace administrators cannot access it. The inbox shows
+client-reported observations, not confirmed server events. It keeps up to 200
+reports from the past 30 days in the instance's admin data directory. Expired
+entries are pruned on the next successful inbox read or report submission;
+backup copies follow the deployment's backup retention.

@@ -1,6 +1,5 @@
 import { watch } from 'vue';
-import type { FetchError } from 'ofetch';
-import { normalizeError, parseRetryAfter } from '~~/shared/errors';
+import { noteClientSessionRateLimit } from '~/composables/auth/client-session-request';
 import { useSessionContext } from '~/composables/auth/useSessionContext';
 import { confirmClientSignedOut } from '~/composables/auth/confirmClientSignedOut';
 import {
@@ -20,30 +19,30 @@ export default defineNuxtPlugin((nuxtApp) => {
     const runtimeConfig = useRuntimeConfig();
     if (!runtimeConfig.public.ssrAuthEnabled) return;
 
-    const sessionContext = useSessionContext();
+    const sessionContext = useSessionContext({ autoLoad: false });
     const toast = useToast();
     const { refreshSessionForActiveWorkspaceRevision } =
         useWorkspaceManagerSession(sessionContext);
 
     let retryAt = 0;
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
-    let activeRefreshes = 0;
-    const handleAuthSessionChanged = async (): Promise<void> => {
-        if (Date.now() < retryAt) {
-            retryTimer ??= setTimeout(() => {
-                retryTimer = undefined;
-                void handleAuthSessionChanged();
-            }, retryAt - Date.now());
-            return;
-        }
-        clearTimeout(retryTimer);
-        retryTimer = undefined;
-        activeRefreshes++;
+    let activeRefresh: Promise<void> | undefined;
+    let pendingIdentitySignal = false;
+    let disposed = false;
+    const scheduleRetry = () => {
+        if (disposed || retryTimer || !retryAt) return;
+        retryTimer = setTimeout(() => {
+            retryTimer = undefined;
+            void handleAuthSessionChanged();
+        }, Math.min(2_147_483_647, Math.max(0, retryAt - Date.now())));
+    };
+    const runRefresh = async (): Promise<void> => {
         try {
             const previous = sessionContext.data.value?.session;
             const transition = { reload: false, signedOut: false };
             const refreshed = await sessionContext.refresh({
                 async shouldCommit(payload) {
+                    if (disposed || pendingIdentitySignal) return false;
                     const next = payload.session;
                     const previousAuthenticated = previous?.authenticated ?? false;
                     const nextAuthenticated = next?.authenticated ?? false;
@@ -54,7 +53,7 @@ export default defineNuxtPlugin((nuxtApp) => {
                     if (previousAuthenticated && !nextAuthenticated) {
                         transition.signedOut = await confirmClientSignedOut();
                         transition.reload = transition.signedOut;
-                        return transition.signedOut;
+                        return !disposed && !pendingIdentitySignal && transition.signedOut;
                     }
                     if (!previousAuthenticated && nextAuthenticated) {
                         // Let the new page bootstrap sync once.
@@ -65,23 +64,28 @@ export default defineNuxtPlugin((nuxtApp) => {
                     return true;
                 },
             });
-            if (!refreshed) return;
+            if (!refreshed || disposed || pendingIdentitySignal) return;
             retryAt = 0;
             toast.remove(AUTH_SESSION_ERROR_TOAST_ID);
             if (transition.signedOut) {
                 const { cleanupConfirmedLogout } = await import('~/utils/logout-cleanup');
-                if (sessionContext.data.value !== refreshed) return;
+                if (disposed || pendingIdentitySignal || sessionContext.data.value !== refreshed) return;
                 await cleanupConfirmedLogout(refreshed, nuxtApp);
-                if (sessionContext.data.value !== refreshed) return;
+                if (disposed || pendingIdentitySignal || sessionContext.data.value !== refreshed) return;
             }
             if (transition.reload) reloadNuxtApp({ ttl: 500 });
         } catch (error) {
-            const rateLimited = normalizeError(error).status === 429;
-            const retryAfter = rateLimited
-                ? parseRetryAfter((error as FetchError).response?.headers.get('retry-after') ?? null)
-                : undefined;
-            if (rateLimited) retryAt = Math.max(retryAt, Date.now() + (retryAfter ?? 60_000));
-            const seconds = Math.ceil((retryAt - Date.now()) / 1000);
+            if (disposed) return;
+            const limitedUntil = noteClientSessionRateLimit(error);
+            const rateLimited = limitedUntil !== undefined;
+            if (rateLimited) {
+                retryAt = limitedUntil;
+                scheduleRetry();
+                // Existing local view/drafts stay intact while this retry is
+                // pending. Do not turn a background 429 into an error toast.
+                if (sessionContext.data.value?.session?.authenticated) return;
+            }
+            const seconds = Math.max(1, Math.ceil((retryAt - Date.now()) / 1000));
             toast.add({
                 id: AUTH_SESSION_ERROR_TOAST_ID,
                 title: rateLimited ? 'Too many requests' : 'Unable to load your account',
@@ -94,15 +98,39 @@ export default defineNuxtPlugin((nuxtApp) => {
                     label: 'Retry',
                     closeOnClick: false,
                     onClick: () => {
-                        if (!activeRefreshes && Date.now() >= retryAt) void handleAuthSessionChanged();
+                        if (!activeRefresh && Date.now() >= retryAt) void handleAuthSessionChanged();
                     },
                 }],
             });
             console.warn('[auth-session-refresh] Failed to refresh auth session:', error);
-        } finally {
-            activeRefreshes--;
         }
     };
+    function handleAuthSessionChanged(identitySignal = false): Promise<void> {
+        if (disposed) return Promise.resolve();
+        if (activeRefresh) {
+            // An actual identity signal after the request started may need a
+            // fresh check; expiry, focus, and repeated sync errors can join.
+            pendingIdentitySignal ||= identitySignal;
+            return activeRefresh;
+        }
+        if (Date.now() < retryAt) {
+            scheduleRetry();
+            return Promise.resolve();
+        }
+        clearTimeout(retryTimer);
+        retryTimer = undefined;
+        retryAt = 0;
+        activeRefresh = runRefresh().finally(() => {
+            activeRefresh = undefined;
+            if (pendingIdentitySignal) {
+                pendingIdentitySignal = false;
+                void handleAuthSessionChanged();
+            }
+        });
+        return activeRefresh;
+    }
+    const handleIdentitySignal = () => { void handleAuthSessionChanged(true); };
+    const handleSyncSignal = () => { void handleAuthSessionChanged(); };
 
     const handleActiveWorkspaceRevision = async (
         revision: ActiveWorkspaceRevision
@@ -134,24 +162,19 @@ export default defineNuxtPlugin((nuxtApp) => {
             void handleActiveWorkspaceRevision(revision);
             return;
         }
-        if (event.key === AUTH_SESSION_STORAGE_KEY) {
-            void handleAuthSessionChanged();
-        }
+        if (event.key === AUTH_SESSION_STORAGE_KEY) handleIdentitySignal();
     };
 
     // Provider cookies can renew independently of the host's cached session.
     // Refresh at expiry, and again on focus after suspended/offline tabs resume.
     let expiryTimer: ReturnType<typeof setTimeout> | undefined;
-    let expiryRefresh: Promise<void> | null = null;
     const refreshExpiredSession = (): void => {
         const session = sessionContext.data.value?.session;
         if (
             !session?.authenticated || !session.expiresAt ||
-            Date.parse(session.expiresAt) > Date.now() || expiryRefresh
+            Date.parse(session.expiresAt) > Date.now()
         ) return;
-        expiryRefresh = handleAuthSessionChanged().finally(() => {
-            expiryRefresh = null;
-        });
+        void handleAuthSessionChanged();
     };
     const stopExpiryWatch = watch(
         () => sessionContext.data.value?.session?.expiresAt,
@@ -171,26 +194,21 @@ export default defineNuxtPlugin((nuxtApp) => {
     window.addEventListener('focus', refreshExpiredSession);
     document.addEventListener('visibilitychange', handleVisibility);
 
-    window.addEventListener('or3:auth-session-changed', handleAuthSessionChanged);
-    window.addEventListener('or3:sync-session-invalid', handleAuthSessionChanged);
+    window.addEventListener('or3:auth-session-changed', handleIdentitySignal);
+    window.addEventListener('or3:sync-session-invalid', handleSyncSignal);
     window.addEventListener('storage', handleStorage);
 
-    if (import.meta.hot) {
-        import.meta.hot.dispose(() => {
-            stopExpiryWatch();
-            clearTimeout(expiryTimer);
-            clearTimeout(retryTimer);
-            window.removeEventListener('focus', refreshExpiredSession);
-            document.removeEventListener('visibilitychange', handleVisibility);
-            window.removeEventListener(
-                'or3:auth-session-changed',
-                handleAuthSessionChanged
-            );
-            window.removeEventListener(
-                'or3:sync-session-invalid',
-                handleAuthSessionChanged
-            );
-            window.removeEventListener('storage', handleStorage);
-        });
-    }
+    const dispose = () => {
+        disposed = true;
+        stopExpiryWatch();
+        clearTimeout(expiryTimer);
+        clearTimeout(retryTimer);
+        window.removeEventListener('focus', refreshExpiredSession);
+        document.removeEventListener('visibilitychange', handleVisibility);
+        window.removeEventListener('or3:auth-session-changed', handleIdentitySignal);
+        window.removeEventListener('or3:sync-session-invalid', handleSyncSignal);
+        window.removeEventListener('storage', handleStorage);
+    };
+    nuxtApp.vueApp?.onUnmount(dispose);
+    import.meta.hot?.dispose(dispose);
 });

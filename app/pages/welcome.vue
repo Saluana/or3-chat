@@ -4,13 +4,13 @@
         <component
             :is="lockPageComponent"
             v-if="customAdapterOwnsPage"
-            :access-reason="access.reason"
+            :access-reason="access.reason === 'session-rate-limited' ? 'session-error' : access.reason"
             :error-message="access.errorMessage"
         />
         <LockPageShell v-else>
             <component
                 :is="lockPageComponent"
-                :access-reason="access.reason"
+                :access-reason="access.reason === 'session-rate-limited' ? 'session-error' : access.reason"
                 :error-message="access.errorMessage"
             />
         </LockPageShell>
@@ -42,7 +42,7 @@ import {
 const route = useRoute();
 const lockPageConfig = useLockPageRuntimeConfig();
 const access = await resolveLockPageAccess();
-const showAccessNotice = access.reason === 'session-error' || access.reason === 'forbidden';
+const showAccessNotice = access.reason === 'session-error' || access.reason === 'session-rate-limited' || access.reason === 'forbidden';
 
 if (access.allowed) {
     const next = Array.isArray(route.query.next) ? route.query.next[0] : route.query.next;

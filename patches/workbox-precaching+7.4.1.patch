@@ -1,0 +1,49 @@
+diff --git a/node_modules/workbox-precaching/PrecacheController.js b/node_modules/workbox-precaching/PrecacheController.js
+--- a/node_modules/workbox-precaching/PrecacheController.js
++++ b/node_modules/workbox-precaching/PrecacheController.js
+@@ -150,21 +150,30 @@
+         return waitUntil(event, async () => {
+             const installReportPlugin = new PrecacheInstallReportPlugin();
+             this.strategy.plugins.push(installReportPlugin);
+-            // Cache entries one at a time.
+-            // See https://github.com/GoogleChrome/workbox/issues/2528
+-            for (const [url, cacheKey] of this._urlsToCacheKeys) {
+-                const integrity = this._cacheKeysToIntegrities.get(cacheKey);
+-                const cacheMode = this._urlsToCacheModes.get(url);
+-                const request = new Request(url, {
+-                    integrity,
+-                    cache: cacheMode,
+-                    credentials: 'same-origin',
+-                });
+-                await Promise.all(this.strategy.handleAll({
+-                    params: { cacheKey },
+-                    request,
+-                    event,
+-                }));
++            // Keep installation atomic and preserve Workbox's revision,
++            // integrity and cacheability checks. Bound concurrent downloads
++            // rather than installing hundreds of resources one by one.
++            const entries = [...this._urlsToCacheKeys];
++            const batchSize = 8;
++            for (let offset = 0; offset < entries.length; offset += batchSize) {
++                const outcomes = await Promise.allSettled(entries.slice(offset, offset + batchSize).map(
++                    ([url, cacheKey]) => {
++                        const integrity = this._cacheKeysToIntegrities.get(cacheKey);
++                        const cacheMode = this._urlsToCacheModes.get(url);
++                        const request = new Request(url, {
++                            integrity,
++                            cache: cacheMode,
++                            credentials: 'same-origin',
++                        });
++                        return Promise.all(this.strategy.handleAll({
++                            params: { cacheKey },
++                            request,
++                            event,
++                        }));
++                    },
++                ));
++                const failed = outcomes.find(({ status }) => status === 'rejected');
++                if (failed) throw failed.reason;
+             }
+             const { updatedURLs, notUpdatedURLs } = installReportPlugin;
+             if (process.env.NODE_ENV !== 'production') {

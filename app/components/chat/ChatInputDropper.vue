@@ -15,6 +15,9 @@
         @click="handleContainerClick"
     >
         <div class="chat-input-inner-container flex flex-col gap-3.5 m-3.5">
+            <p v-if="!online" role="status" class="text-xs text-(--md-on-surface-variant)">
+                Offline. Keep drafting here and reconnect for AI replies.
+            </p>
             <p v-if="failedAttachmentNames.length" role="alert" class="text-sm text-(--md-error)">
                 Attachments could not be saved: {{ failedAttachmentNames.join(', ') }}.
                 Remove and attach those files again.
@@ -22,7 +25,7 @@
             <div v-if="sendBlock" role="status" aria-live="polite" class="space-y-2 text-xs">
                 <p>{{ sendBlock.error || 'Edit the request or choose a larger model.' }}</p>
                 <div class="flex flex-wrap gap-2">
-                    <UButton v-if="sendBlock.reason !== 'unsupported_input'" size="xs" variant="soft" color="neutral" @click.stop="settingsPopoverOpen = true">Chat memory</UButton>
+                    <UButton v-if="sendBlock.reason !== 'unsupported_input'" size="xs" variant="soft" color="neutral" @click.stop="chatSettingsOpen = true">Chat memory</UButton>
                     <UButton size="xs" variant="ghost" color="neutral" @click.stop="showModelCatalog = true">Choose model</UButton>
                     <UButton v-if="sendBlock.reason === 'context_full' && !('userMessageId' in sendBlock && sendBlock.userMessageId)" size="xs" variant="ghost" color="neutral" :disabled="loading" @click.stop="handleSend({ inspectLossyRequest: true })">Review messages to leave out</UButton>
                 </div>
@@ -96,14 +99,10 @@
                     <!-- Settings Button -->
                     <div class="chat-input-settings-btn relative shrink-0">
                         <ClientOnly>
-                            <UPopover
-                                v-model:open="settingsPopoverOpen"
-                                class="chat-input-settings-popover"
-                                :content="{ side: 'top', collisionPadding: 16 }"
-                                :ui="{
-                                    content:
-                                        'data-[state=open]:animate-[fade-in_170ms_ease-out] data-[state=closed]:animate-[fade-out_120ms_ease-in] motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none',
-                                }"
+                            <component
+                                :is="chatSettingsSurface"
+                                v-model:open="chatSettingsOpen"
+                                v-bind="chatSettingsSurfaceProps"
                             >
                                 <UButton
                                     v-bind="settingsButtonProps"
@@ -120,7 +119,16 @@
                                     />
                                 </UButton>
                                 <template #content>
+                                    <div
+                                        v-if="isMobile"
+                                        class="chat-settings-sheet-handle flex h-8 w-full shrink-0 cursor-grab items-center justify-center active:cursor-grabbing"
+                                        aria-hidden="true"
+                                        v-bind="chatSettingsHandleProps"
+                                    >
+                                        <span class="h-1 w-10 rounded-full bg-[color:var(--md-on-surface-variant)]/40" />
+                                    </div>
                                     <ChatSettingsPopover
+                                        :sheet="isMobile"
                                         :container-width="containerWidth"
                                         :loading="loading"
                                         :streaming="streaming"
@@ -151,7 +159,7 @@
                                         v-model:reasoning-effort="
                                             reasoningEffort
                                         "
-                                        @close="settingsPopoverOpen = false"
+                                        @close="chatSettingsOpen = false"
                                         @open-system-prompts="
                                             openSystemPromptsFromSettings
                                         "
@@ -164,7 +172,7 @@
                                         @prompt-selected="promptSelectionRevision++"
                                     />
                                 </template>
-                            </UPopover>
+                            </component>
                             <template #fallback>
                                 <UButton
                                     v-bind="settingsButtonProps"
@@ -402,6 +410,7 @@ import { openRouterCatalogLookupId, openRouterToolCapability, stripLegacyThinkin
 import { presentError } from '~~/shared/errors';
 import { claimAutomaticCompaction, CompactionError } from '~/db/compaction';
 import { useContextPreview } from '~/composables/chat/useContextPreview';
+import { useBottomSheetDrag } from '~/composables/ui/useBottomSheetDrag';
 import { useModelStore } from '~/composables/chat/useModelStore';
 import { useToolRegistry } from '~/utils/chat/tool-registry';
 import { resolveReasoningConfig } from '~~/shared/openrouter/reasoning';
@@ -420,6 +429,7 @@ import {
     getCurrentInstance,
     useId,
     defineAsyncComponent,
+    resolveComponent,
 } from 'vue';
 import { isMentionSourceEnabled, useOr3Config } from '~/composables/useOr3Config';
 import { useSystemPromptsModal } from '~/composables/chat/useSystemPromptsModal';
@@ -480,6 +490,8 @@ import {
     sanitizeModelVariant,
     type OpenRouterModelVariant,
 } from '~~/shared/openrouter/model-variants';
+
+const online = useOnline();
 
 const OpenRouterKeyModal = defineAsyncComponent(
     () => import('~/components/chat/OpenRouterKeyModal.vue')
@@ -754,11 +766,42 @@ watch(showModelCatalog, (open) => {
 watch(showKeyModal, (open) => {
     if (open) keyModalActivated.value = true;
 });
-const settingsPopoverOpen = ref(false);
+const chatSettingsOpen = ref(false);
+const chatSettingsPopover = resolveComponent('UPopover');
+const chatSettingsSlideover = resolveComponent('USlideover');
+const chatSettingsSurface = computed(() => isMobile.value ? chatSettingsSlideover : chatSettingsPopover);
+const {
+    offset: chatSettingsDragY,
+    isDragging: chatSettingsDragging,
+    handleProps: chatSettingsHandleProps,
+    reset: resetChatSettingsDrag,
+} = useBottomSheetDrag(chatSettingsOpen, () => { chatSettingsOpen.value = false; });
+const chatSettingsSurfaceProps = computed(() => isMobile.value ? {
+    side: 'bottom' as const,
+    title: 'Chat settings',
+    description: 'Manage the model, memory, and preferences for this chat.',
+    content: {
+        style: { translate: `0 ${chatSettingsDragY.value}px` },
+        'data-dragging': chatSettingsDragging.value || undefined,
+    },
+    ui: {
+        overlay: 'bg-black/40',
+        content: 'chat-settings-sheet divide-y-0 max-h-[min(88dvh,720px)] overflow-hidden rounded-t-[var(--md-border-radius-large,24px)] bg-[color:var(--md-surface)] pb-[env(safe-area-inset-bottom)]',
+    },
+    'onAfter:leave': resetChatSettingsDrag,
+} : {
+    class: 'chat-input-settings-popover',
+    content: { side: 'top' as const, collisionPadding: 16 },
+    ui: {
+        content: 'data-[state=open]:animate-[fade-in_170ms_ease-out] data-[state=closed]:animate-[fade-out_120ms_ease-in] motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none',
+    },
+});
+// A breakpoint change replaces the overlay and its focus scope.
+watch(isMobile, () => { chatSettingsOpen.value = false; });
 const promptOwnerId = computed(() => props.tabId ?? props.paneId);
 const stagedPromptId = usePanePendingPrompt(promptOwnerId);
 const promptSelectionRevision = ref(0);
-watch(settingsPopoverOpen, (open) => {
+watch(chatSettingsOpen, (open) => {
     if (open) promptSelectionRevision.value++;
 });
 const systemPromptsModal = useSystemPromptsModal();
@@ -776,12 +819,12 @@ function openSystemPrompts() {
 }
 
 function openSystemPromptsFromSettings() {
-    settingsPopoverOpen.value = false;
+    chatSettingsOpen.value = false;
     openSystemPrompts();
 }
 
 function openModelCatalogFromSettings() {
-    settingsPopoverOpen.value = false;
+    chatSettingsOpen.value = false;
     showModelCatalog.value = true;
 }
 
@@ -830,7 +873,7 @@ const {
     armNewChatSelection,
 } = useChatModelSelection({
     threadId: () => props.threadId,
-    shouldFetchCatalog: () => Boolean(props.threadId || connected.value || apiKey.value || hasInstanceKey.value || settingsPopoverOpen.value || showModelCatalog.value),
+    shouldFetchCatalog: () => Boolean(props.threadId || connected.value || apiKey.value || hasInstanceKey.value || chatSettingsOpen.value || showModelCatalog.value),
     onChange: (modelId) => emit('model-change', modelId),
 });
 
@@ -950,7 +993,7 @@ const previewReasoning = computed(() => {
     return thinkingEnabled.value && modelSupportsThinking.value ? resolveReasoningConfig({ model: metadata, enabled: true, effort: reasoningEffort.value }) : undefined;
 });
 const contextPreview = useContextPreview({ threadId: () => props.threadId, draftId: promptOwnerId, model: previewModel,
-    enabled: () => inputActive.value && Boolean(props.threadId || connected.value || apiKey.value || hasInstanceKey.value || isOpenAiModel(selectedModel.value) || settingsPopoverOpen.value || showModelCatalog.value),
+    enabled: () => inputActive.value && Boolean(props.threadId || connected.value || apiKey.value || hasInstanceKey.value || isOpenAiModel(selectedModel.value) || chatSettingsOpen.value || showModelCatalog.value),
     text: promptText, extraText: () => largeTextBlocks.value.map((block) => block.text).join('\n\n'),
     attachments: () => attachments.value, promptSelection: stagedPromptId,
     revision: () => [props.contextRevision, promptSelectionRevision.value], reasoning: previewReasoning });
@@ -1375,9 +1418,18 @@ async function handleSend(decision: { inspectLossyRequest?: boolean; lossyConfir
 const performSend = async (decision: { inspectLossyRequest?: boolean; lossyConfirmation?: import('~/utils/chat/lossy-request').LossyRequestPreview }, explicitText?: string): Promise<SendResult> => {
     const independent = explicitText !== undefined;
     if (props.loading) return { status: 'rejected', reason: 'busy' };
+    if (viewOnly.value) return { status: 'rejected', reason: 'unavailable' };
+    if (!online.value) {
+        return {
+            status: 'rejected',
+            reason: 'unavailable',
+            error: independent
+                ? 'Reconnect to send your message.'
+                : 'Reconnect to send your message. Your draft is still here.',
+        };
+    }
     const compatibilityMessage = independent ? toolCompatibilityMessage.value : modelCompatibilityMessage.value;
     if (compatibilityMessage) return { status: 'rejected', reason: 'client_limit', error: compatibilityMessage };
-    if (viewOnly.value) return { status: 'rejected', reason: 'unavailable' };
     // Account first: a signed-out visitor cannot use any key, so never ask for one.
     if (signInRequired.value) {
         promptSignIn();
@@ -1649,7 +1701,7 @@ const handlePromptSelected = (id: string) => {
 };
 
 // Emit live height via useResizeObserver (VueUse handles cleanup automatically)
-import { useResizeObserver } from '@vueuse/core';
+import { useOnline, useResizeObserver } from '@vueuse/core';
 
 const componentRootRef = ref<HTMLElement | null>(null);
 let lastHeight: number | null = null;
