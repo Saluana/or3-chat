@@ -786,7 +786,7 @@ const chatSettingsSurfaceProps = computed(() => isMobile.value ? {
     },
     ui: {
         overlay: 'bg-black/40',
-        content: 'chat-settings-sheet divide-y-0 max-h-[min(88dvh,720px)] overflow-hidden rounded-t-[var(--md-border-radius-large,24px)] bg-[color:var(--md-surface)] pb-[env(safe-area-inset-bottom)]',
+        content: 'chat-settings-sheet divide-y-0 h-[min(88svh,720px)] overflow-hidden rounded-t-[var(--md-border-radius-large,24px)] bg-[color:var(--md-surface)] pb-[env(safe-area-inset-bottom)]',
     },
     'onAfter:leave': resetChatSettingsDrag,
 } : {
