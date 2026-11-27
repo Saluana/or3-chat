@@ -25,8 +25,9 @@ export function resolveCloudAccess(event: H3Event, session: SessionContext): Clo
     return policy?.resolve(event, session);
 }
 
-export async function requireCloudAccess(event: H3Event, session: SessionContext): Promise<void> {
-    if (!cloudAccessAllowed(await resolveCloudAccess(event, session))) {
+export async function requireCloudAccess(event: H3Event, session: SessionContext, use?: 'background'): Promise<void> {
+    const access = await resolveCloudAccess(event, session);
+    if (!cloudAccessAllowed(access) || (use === 'background' && access?.backgroundAllowed === false)) {
         throw createError({ statusCode: 402, statusMessage: 'Cloud plan required', data: { code: 'cloud_plan_required', billingUrl: '/billing' } });
     }
 }

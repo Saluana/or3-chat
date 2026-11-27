@@ -3,9 +3,11 @@ import { computed, onScopeDispose, ref, watch } from 'vue';
 import { useResizeObserver, useLocalStorage } from '@vueuse/core';
 import { NuxtLink } from '#components';
 import { useRoute } from '#app';
+import { useCloudAccess } from '~/core/cloud/access';
 import { useBilling } from '../composables/useBilling';
 const route = useRoute();
 const { status, error, userId } = useBilling();
+const workspaceCloudEnabled = useCloudAccess();
 // A display preference only. Access always comes from the server.
 const dismissed = useLocalStorage('or3:billing-banner-dismissed', '');
 const noticeKey = computed(() => `${userId.value ?? ''}:${status.value?.state ?? 'unavailable'}:${status.value?.trialEndsAt ?? 0}:${status.value?.paidUntil ?? 0}`);
@@ -43,7 +45,7 @@ const messageParts = computed(() => {
 </script>
 
 <template>
-    <aside v-if="(status || error) && dismissed !== noticeKey && status?.state !== 'active' && !route.path.startsWith('/admin') && route.path !== '/billing'" ref="banner"
+    <aside v-if="(status || error) && !(workspaceCloudEnabled && status && !status.allowed) && dismissed !== noticeKey && status?.state !== 'active' && !route.path.startsWith('/admin') && route.path !== '/billing'" ref="banner"
         aria-label="Subscription" class="billing-notice" :data-tone="needsAttention ? 'attention' : 'neutral'">
         <div class="billing-notice__row">
             <span role="status" class="billing-notice__status">

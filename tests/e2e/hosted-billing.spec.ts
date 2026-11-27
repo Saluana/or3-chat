@@ -1,5 +1,7 @@
 import { expect, test, type APIRequestContext } from '@playwright/test';
 import Database from 'better-sqlite3';
+import { createHash } from 'node:crypto';
+import { text } from 'node:stream/consumers';
 import { execFileSync } from 'node:child_process';
 import { basename, dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -690,4 +692,140 @@ test('retained cleanup confirmation and retry UI', async ({ page, baseURL }, inf
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
     await page.screenshot({ path: info.outputPath('retained-cleanup-mobile-confirmation.png'), fullPage: true, animations: 'disabled' });
     await info.attach('cleanup-ui-receipt.json', { body: JSON.stringify({ physicalDeletionQualified: false, submitted, realUnqualifiedServerStatus: 503 }), contentType: 'application/json' });
+});
+
+// This complements the non-billing workspace role suite: the actual hosted
+// policy must admit a member's browser transport without upgrading their account.
+test('owner-paid sharing is scoped to the active workspace and stops at expiry', async ({ browser, baseURL }) => {
+    const root = process.env.OR3_WORKSPACE_CLOUD_E2E_DIR;
+    if (!root || dirname(resolve(root)) !== resolve(tmpdir()) ||
+        !/^or3-workspace-cloud-e2e-[a-zA-Z0-9]+$/.test(basename(root)) ||
+        process.env.OR3_BILLING_SQLITE_PATH !== join(root, 'billing.sqlite')) {
+        throw new Error('Use bun run test:e2e:hosted-billing with its disposable databases.');
+    }
+    test.setTimeout(90_000);
+    const contexts = await Promise.all(Array.from({ length: 3 }, () => browser.newContext({ baseURL })));
+    const [owner, member, admin] = contexts.map(context => context.request);
+    const headers = { origin: baseURL!, 'x-or3-cloud-intent': 'mutation' };
+    const adminHeaders = { origin: baseURL!, 'x-or3-admin-intent': 'admin' };
+    const db = new Database(process.env.OR3_BILLING_SQLITE_PATH);
+    try {
+        async function register(api: APIRequestContext, role: string) {
+            const email = `sharing-${role}-${Date.now()}@example.test`;
+            const password = 'DisposableWorkspaceSharing!123';
+            const response = await api.post('/api/basic-auth/register', { headers, data: { email, password, confirmPassword: password } });
+            expect(response.ok(), await response.text()).toBe(true);
+            expect((await api.get('/api/billing/status')).ok()).toBe(true);
+            return (await (await api.get('/api/auth/session')).json()).session;
+        }
+        const o = await register(owner!, 'owner');
+        const m = await register(member!, 'member');
+        const paidUntil = Date.now() + 86_400_000;
+        db.prepare("UPDATE billing_accounts SET subscription_status = 'active', subscription_id = 'sub_owner_sharing_fixture', paid_until = ?, trial_ends_at = 0 WHERE user_id = ?").run(paidUntil, o.user.id);
+        db.prepare('UPDATE billing_accounts SET trial_ends_at = 0 WHERE user_id = ?').run(m.user.id);
+        const readAccess = async () => (await (await member!.get('/api/auth/session')).json()).cloudAccess;
+        expect((await readAccess()).enabled).toBe(false);
+
+        const login = await admin!.post('/api/admin/auth/login', { headers: adminHeaders, data: {
+            username: 'workspace-e2e-admin', password: 'DisposableAdminE2e!123',
+        } });
+        expect(login.ok(), await login.text()).toBe(true);
+        const created = await owner!.post('/api/workspaces', { headers, data: { name: 'Owner-paid test workspace' } });
+        expect(created.ok(), await created.text()).toBe(true);
+        const { id: workspaceId } = await created.json();
+        const switchMember = (id: string) => member!.post('/api/workspaces/active', { headers, data: { id } });
+        expect((await switchMember(workspaceId)).status()).toBe(403);
+        for (const role of ['viewer', 'editor']) {
+            const admission = await admin!.post('/api/admin/workspace/members/upsert', { headers: adminHeaders, data: {
+                workspaceId, provider: 'basic-auth', emailOrProviderId: m.providerUserId, role,
+            } });
+            expect(admission.ok(), await admission.text()).toBe(true);
+            expect((await switchMember(workspaceId)).ok()).toBe(true);
+            expect(await readAccess()).toMatchObject({ enabled: true, expiresAt: paidUntil, backgroundAllowed: false });
+            const bytes = Buffer.from('Owner-paid workspace acceptance');
+            const hash = `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
+            const upload = await member!.post('/api/storage/presign-upload', { headers, data: {
+                workspace_id: workspaceId, hash, mime_type: 'text/plain', size_bytes: bytes.length, file_kind_capability: 'v1',
+            } });
+            expect(upload.status(), await upload.text()).toBe(role === 'viewer' ? 403 : 200);
+            if (role === 'viewer') {
+                const page = await contexts[1]!.newPage();
+                const snapshot = page.waitForResponse(response => new URL(response.url()).pathname === '/api/sync/snapshot' &&
+                    response.request().postDataJSON()?.scope?.workspaceId === workspaceId);
+                await page.goto('/chat');
+                expect((await snapshot).ok()).toBe(true);
+                await page.close();
+            }
+        }
+        // A shared editor still can't start personal background execution. This
+        // ends at admission with no model lookup or API credential required.
+        expect((await member!.post('/api/openrouter/stream', { headers, data: { _background: true } })).status()).toBe(402);
+        const fileName = 'owner-paid-original.txt';
+        const fileBytes = Buffer.from('Known bytes from the shared Editor');
+        const editorPage = await contexts[1]!.newPage();
+        await editorPage.goto('/chat');
+        const welcome = editorPage.getByRole('button', { name: 'Dismiss welcome', exact: true });
+        await editorPage.addLocatorHandler(welcome, () => welcome.click());
+        await editorPage.getByRole('complementary', { name: 'Navigation' }).getByRole('button', { name: 'Files', exact: true }).click();
+        const commit = editorPage.waitForResponse(response => new URL(response.url()).pathname === '/api/storage/commit');
+        const catalogPush = editorPage.waitForResponse(response =>
+            new URL(response.url()).pathname === '/api/sync/push' &&
+            (response.request().postData() ?? '').includes(fileName));
+        await editorPage.getByLabel('Upload files', { exact: true }).setInputFiles({ name: fileName, mimeType: 'text/plain', buffer: fileBytes });
+        expect((await commit).ok()).toBe(true);
+        expect((await catalogPush).ok()).toBe(true);
+        await editorPage.close();
+        const makeViewer = await admin!.post('/api/admin/workspace/members/upsert', { headers: adminHeaders, data: {
+            workspaceId, provider: 'basic-auth', emailOrProviderId: m.providerUserId, role: 'viewer',
+        } });
+        expect(makeViewer.ok()).toBe(true);
+        // A fresh recipient profile cannot accidentally read the Editor's cached original.
+        const receivingProfile = await browser.newContext({ baseURL });
+        contexts.push(receivingProfile);
+        expect((await receivingProfile.request.post('/api/basic-auth/sign-in', { headers, data: {
+            email: m.user.email, password: 'DisposableWorkspaceSharing!123',
+        } })).ok()).toBe(true);
+        const viewerPage = await receivingProfile.newPage();
+        let viewerPushes = 0;
+        viewerPage.on('request', request => { if (new URL(request.url()).pathname === '/api/sync/push') viewerPushes++; });
+        await viewerPage.goto('/chat');
+        const viewerWelcome = viewerPage.getByRole('button', { name: 'Dismiss welcome', exact: true });
+        await viewerPage.addLocatorHandler(viewerWelcome, () => viewerWelcome.click());
+        await viewerPage.getByRole('complementary', { name: 'Navigation' }).getByRole('button', { name: 'Files', exact: true }).click();
+        await viewerPage.getByRole('button', { name: 'More actions for ' + fileName, exact: true }).click();
+        const original = viewerPage.waitForEvent('download');
+        await viewerPage.getByRole('menuitem', { name: 'Download original', exact: true }).click();
+        expect(await (await original).createReadStream().then(stream => stream ? text(stream) : '')).toBe(fileBytes.toString());
+        expect(viewerPushes).toBe(0);
+
+        const downloadBody = { workspace_id: workspaceId,
+            hash: `sha256:${createHash('sha256').update(fileBytes).digest('hex')}`, disposition: 'attachment', file_kind_capability: 'v1' };
+        const outsider = await browser.newContext({ baseURL });
+        contexts.push(outsider);
+        await register(outsider.request, 'outsider');
+        const outsiderDownload = await outsider.request.post('/api/storage/presign-download', { headers, data: downloadBody });
+        expect(outsiderDownload.status()).toBe(403);
+        expect(new URL((await outsiderDownload.json()).url).pathname).toBe('/api/storage/presign-download');
+
+        expect((await (await member!.get('/api/billing/status')).json()).allowed).toBe(false);
+        expect((await member!.post('/api/workspaces', { headers, data: { name: 'Not covered' } })).status()).toBe(402);
+        expect((await switchMember(m.workspace.id)).ok()).toBe(true);
+        expect((await readAccess()).enabled).toBe(false);
+        expect((await switchMember(workspaceId)).ok()).toBe(true);
+
+        db.prepare('UPDATE billing_accounts SET cancel_at_period_end = 1 WHERE user_id = ?').run(o.user.id);
+        expect(await readAccess()).toMatchObject({ enabled: true, expiresAt: paidUntil, backgroundAllowed: false });
+        db.prepare("UPDATE billing_accounts SET subscription_status = 'canceled', paid_until = ? WHERE user_id = ?").run(Date.now() - 1, o.user.id);
+        expect(await readAccess()).toEqual({ enabled: false, expiresAt: 0 });
+        expect((await member!.post('/api/sync/snapshot', { headers, data: {} })).status()).toBe(402);
+        expect((await member!.post('/api/storage/presign-download', { headers, data: downloadBody })).status()).toBe(402);
+        expect((await member!.get('/api/workspaces/backup', { params: { workspaceId } })).status()).toBe(402);
+        expect((await owner!.post('/api/workspaces/active', { headers, data: { id: workspaceId } })).ok()).toBe(true);
+        const recovery = await owner!.post('/api/storage/presign-download', { headers, data: downloadBody });
+        expect(recovery.ok()).toBe(true);
+        expect(await (await owner!.get((await recovery.json()).url)).body()).toEqual(fileBytes);
+    } finally {
+        db.close();
+        await Promise.all(contexts.map(context => context.close()));
+    }
 });

@@ -4,9 +4,10 @@ import { cloudAccessAllowed } from '~~/shared/cloud/access';
 import { computed, ref, watch, onScopeDispose } from 'vue';
 
 /** Client scheduling hint only; the server enforces the current policy independently. */
-export function hasCloudAccess(): boolean {
+export function hasCloudAccess(use?: 'background'): boolean {
     const required = useRuntimeConfig().public.cloudAccessPolicyEnabled === true;
-    return !required || cloudAccessAllowed(getCachedSessionPayload()?.cloudAccess, true);
+    const access = getCachedSessionPayload()?.cloudAccess;
+    return !required || (cloudAccessAllowed(access, true) && (use !== 'background' || access?.backgroundAllowed !== false));
 }
 
 /** Reactive expiry also stops transport without waiting for another successful request. */
