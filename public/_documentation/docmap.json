@@ -710,7 +710,7 @@
                     "category": "Providers",
                     "categoryOrder": 2,
                     "order": 13,
-                    "summary": "S3 and Hippius setup, bounded server requests and retries, verified transfers, dormant immutable generations and coordinated cleanup, retained quotas, offline SHA-256 backup preparation, and qualification."
+                    "summary": "S3 and Hippius setup, exact-origin CORS and production release checks, bounded server retries, verified transfers, dormant immutable generations and coordinated cleanup, retained quotas, offline SHA-256 backup preparation, and qualification."
                 },
                 {
                     "name": "deployment-operations.md",
