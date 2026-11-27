@@ -54,7 +54,22 @@
                 </div>
             </div>
 
-            <div class="settings-page-body">
+            <!--
+                Rows stay quiet: details and favorites live in one context menu
+                (long-press on touch, right-click with a mouse). Hover-capable
+                pointers and keyboard focus also reveal a details button.
+            -->
+            <UContextMenu
+                :items="rowMenuItems"
+                :ui="{ content: 'min-w-52' }"
+                @update:open="onRowMenuOpenChange"
+            >
+            <div
+                ref="listBody"
+                class="settings-page-body"
+                @pointerdown.capture="captureMenuRow"
+                @contextmenu.capture="captureMenuRow"
+            >
                 <p v-if="!catalog.length" class="settings-page-empty">Loading models…</p>
                 <section
                     v-for="section in sections"
@@ -68,6 +83,7 @@
                             v-for="row in section.rows"
                             :key="row.id"
                             class="settings-page-row"
+                            :class="{ 'is-menu-target': menuTargetId === row.id }"
                             :data-model-id="row.id"
                         >
                             <button
@@ -75,7 +91,7 @@
                                 class="settings-page-row-main"
                                 :aria-current="row.selected ? 'true' : undefined"
                                 :disabled="disabled"
-                                @click="emit('select', row.id)"
+                                @click="selectRow(row.id)"
                             >
                                 <span class="settings-page-row-icon" aria-hidden="true">
                                     <ModelCatalogProviderLogo :slug="row.slug" :size="18" />
@@ -95,7 +111,7 @@
                                 type="button"
                                 class="settings-page-row-action"
                                 :aria-label="`Details for ${row.name}`"
-                                @click="openDetail(row.id, $event)"
+                                @click="openDetail(row.id, $event.currentTarget)"
                             >
                                 <UIcon :name="infoIcon" class="size-4" />
                             </button>
@@ -117,6 +133,7 @@
                     {{ emptyMessage }}
                 </p>
             </div>
+            </UContextMenu>
 
             <div class="settings-page-footer">
                 <UButton
@@ -187,6 +204,8 @@ const filterIcon = useIcon('catalog.filter');
 const infoIcon = useIcon('ui.info');
 const checkIcon = useIcon('ui.check');
 const closeIcon = useIcon('ui.close');
+const starIcon = useIcon('catalog.star');
+const starFilledIcon = useIcon('catalog.star.filled');
 const externalIcon = useIcon('catalog.external');
 
 const {
@@ -395,10 +414,72 @@ const detailModel = computed(() =>
 
 // Return focus to the row's details button after leaving the detail view.
 let detailTrigger: HTMLElement | null = null;
-function openDetail(id: string, event: MouseEvent) {
-    detailTrigger = event.currentTarget as HTMLElement | null;
+function openDetail(id: string, trigger: EventTarget | null) {
+    detailTrigger = trigger instanceof HTMLElement ? trigger : null;
     emit('open-detail', id);
 }
+
+// One context menu serves every row; the row under the pointer picks its target.
+const listBody = ref<HTMLElement | null>(null);
+const menuRowId = ref<string | null>(null);
+let rowMenuOpen = false;
+let rowMenuChangedAt = 0;
+/** Highlights the row whose menu is open, since the menu can cover it. */
+const menuTargetId = ref<string | null>(null);
+/** A long-press ends with a tap on the row; ignore clicks this soon after the menu opens or closes. */
+const MENU_CLICK_GUARD_MS = 500;
+
+function captureMenuRow(event: Event) {
+    const row = (event.target as HTMLElement | null)?.closest<HTMLElement>('[data-model-id]');
+    menuRowId.value = row?.dataset.modelId ?? null;
+    // Headings, empty space, and "Show more" have no menu.
+    const opensMenu = event.type === 'contextmenu' || (event as PointerEvent).pointerType !== 'mouse';
+    if (!row && opensMenu) event.preventDefault();
+}
+
+function onRowMenuOpenChange(open: boolean) {
+    rowMenuOpen = open;
+    rowMenuChangedAt = Date.now();
+    menuTargetId.value = open ? menuRowId.value : null;
+}
+
+function selectRow(id: string) {
+    if (rowMenuOpen || Date.now() - rowMenuChangedAt < MENU_CLICK_GUARD_MS) return;
+    emit('select', id);
+}
+
+function rowButton(id: string) {
+    return listBody.value?.querySelector<HTMLElement>(
+        `[data-model-id="${CSS.escape(id)}"] .settings-page-row-main`
+    ) ?? null;
+}
+
+const rowMenuItems = computed<DropdownMenuItem[][]>(() => {
+    const model = menuRowId.value
+        ? catalog.value.find((entry) => entry.id === menuRowId.value)
+        : undefined;
+    if (!model) return [];
+    const current = isSelected(model);
+    const favorite = isFavorite(model.id);
+    return [[
+        {
+            label: current ? 'Current model' : 'Use model',
+            icon: checkIcon.value,
+            disabled: current || props.disabled,
+            onSelect: () => emit('select', model.id),
+        },
+        {
+            label: 'Details',
+            icon: infoIcon.value,
+            onSelect: () => openDetail(model.id, rowButton(model.id)),
+        },
+        {
+            label: favorite ? 'Remove from favorites' : 'Add to favorites',
+            icon: favorite ? starFilledIcon.value : starIcon.value,
+            onSelect: () => toggleFavorite(model),
+        },
+    ]];
+});
 watch(detailModel, async (model, previous) => {
     if (model || !previous) return;
     await nextTick();
@@ -525,9 +606,13 @@ onMounted(() => {
 }
 
 .settings-page-row {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 0.125rem;
+    /* Long-press opens the row menu, not iOS text selection or link previews. */
+    -webkit-touch-callout: none;
+    user-select: none;
 }
 
 .settings-page-row-main {
@@ -544,6 +629,10 @@ onMounted(() => {
     border-radius: var(--md-border-radius);
 }
 
+
+.settings-page-row.is-menu-target .settings-page-row-main {
+    background: var(--md-surface-hover);
+}
 
 .settings-page-row-main[aria-current='true'] {
     background: var(--md-surface-container-low);
@@ -598,14 +687,33 @@ onMounted(() => {
 }
 
 .settings-page-row-action {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-end: 0.25rem;
     display: inline-flex;
-    width: 2.75rem;
-    height: 2.75rem;
-    flex: none;
+    width: 2.25rem;
+    height: 2.25rem;
+    margin-block: auto;
     align-items: center;
     justify-content: center;
     color: var(--md-on-surface-variant);
     border-radius: var(--md-border-radius);
+    /*
+     * Hidden until hover or keyboard focus, but still in the accessibility
+     * tree; taps pass through to the row underneath.
+     */
+    opacity: 0;
+    pointer-events: none;
+}
+
+.settings-page-row-action:focus-visible {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* Make room so the revealed button never covers the selected check. */
+.settings-page-row:has(.settings-page-row-action:focus-visible) .settings-page-row-main {
+    padding-inline-end: 2.75rem;
 }
 
 /* Touch screens keep :hover on the last tapped row, so only hover-capable pointers get it. */
@@ -619,9 +727,18 @@ onMounted(() => {
         background: var(--md-surface-hover);
     }
 
+    .settings-page-row:hover .settings-page-row-action {
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+    .settings-page-row:hover .settings-page-row-main {
+        padding-inline-end: 2.75rem;
+    }
+
     .settings-page-row-action:hover {
         color: var(--md-on-surface);
-        background: var(--md-surface-hover);
+        background: var(--md-surface-container-high, var(--md-surface-hover));
     }
 }
 

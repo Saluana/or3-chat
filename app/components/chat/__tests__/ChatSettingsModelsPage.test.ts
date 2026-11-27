@@ -56,6 +56,13 @@ const menuStub = {
     template: '<div class="menu-stub"><slot /></div>',
 };
 
+const contextMenuStub = {
+    name: 'UContextMenu',
+    props: ['items'],
+    emits: ['update:open'],
+    template: '<div class="context-menu-stub"><slot /></div>',
+};
+
 function mountPage(props: Record<string, unknown> = {}) {
     return mount(ChatSettingsModelsPage, {
         props: { selectedModel: 'openai/gpt-4o', detailId: null, ...props },
@@ -65,6 +72,7 @@ function mountPage(props: Record<string, unknown> = {}) {
                 UButton: { template: '<button v-bind="$attrs"><slot /></button>' },
                 UIcon: { template: '<span class="uicon-stub" />' },
                 UDropdownMenu: menuStub,
+                UContextMenu: contextMenuStub,
                 ModelCatalogProviderLogo: { template: '<span />' },
                 ModelCatalogDetail: {
                     name: 'ModelCatalogDetail',
@@ -171,6 +179,36 @@ describe('ChatSettingsModelsPage', () => {
         expect(store.addFavorite).toHaveBeenCalledWith(store.catalog.value[2]);
         detail.vm.$emit('use');
         expect(wrapper.emitted('select')).toEqual([['google/gemini-pro']]);
+    });
+
+    it('offers use, details, and favorite in the row menu instead of row buttons', async () => {
+        const wrapper = mountPage();
+        await flushPromises();
+        await wrapper.find('[data-model-id="google/gemini-pro"] .settings-page-row-title').trigger('contextmenu');
+        const menu = wrapper.findComponent(contextMenuStub);
+        const items = (menu.props('items') as Array<Array<{ label: string; onSelect: () => void }>>).flat();
+        expect(items.map((item) => item.label)).toEqual(['Use model', 'Details', 'Add to favorites']);
+
+        items[1]!.onSelect();
+        expect(wrapper.emitted('open-detail')).toEqual([['google/gemini-pro']]);
+        items[2]!.onSelect();
+        expect(store.addFavorite).toHaveBeenCalledWith(store.catalog.value[2]);
+
+        await wrapper.find('[data-model-id="openai/gpt-4o"] .settings-page-row-title').trigger('contextmenu');
+        const current = (menu.props('items') as Array<Array<{ label: string; disabled?: boolean }>>).flat();
+        expect(current[0]).toMatchObject({ label: 'Current model', disabled: true });
+    });
+
+    it('does not select the row when a long-press opens its menu', async () => {
+        const wrapper = mountPage();
+        await flushPromises();
+        const menu = wrapper.findComponent(contextMenuStub);
+        const row = wrapper.find('[data-model-id="google/gemini-pro"] .settings-page-row-main');
+        menu.vm.$emit('update:open', true);
+        await row.trigger('click');
+        menu.vm.$emit('update:open', false);
+        await row.trigger('click');
+        expect(wrapper.emitted('select')).toBeUndefined();
     });
 
     it('renders a bounded window and extends it on request', async () => {
