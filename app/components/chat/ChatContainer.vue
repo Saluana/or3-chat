@@ -381,7 +381,7 @@ const welcomeContextReady = computed(() => {
     return runtimeConfig.public.ssrAuthEnabled !== true || session?.authenticated === true &&
         session.workspace?.id === getActiveWorkspaceId();
 });
-const { apiKey, connected } = useUserApiKey();
+const { apiKey, connectionStatus } = useUserApiKey();
 const keyStateReady = ref(false);
 const welcomeDismissed = ref(true); // default hidden until hydrated
 // Start the independent reads while this component is being set up. Commit only
@@ -422,7 +422,8 @@ const showWelcomeCard = computed(
             ? !welcomePreviewDismissed.value
             : !welcomeDismissed.value &&
               openRouterAvailability.value.canAcceptUserKey &&
-              !connected.value && !openRouterAvailability.value.hasUsableKey(apiKey.value) && !openAiUsable.value &&
+              connectionStatus.value === 'disconnected' &&
+              !openRouterAvailability.value.hasUsableKey(apiKey.value) && !openAiUsable.value &&
               allMessages.value.length === 0)
 );
 

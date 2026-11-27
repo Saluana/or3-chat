@@ -20,43 +20,70 @@ async function metadata(page: Page, origin: string, operation = 'status') {
     const text = await response.text(); expect(text).not.toContain(canary);
     return JSON.parse(text);
 }
-test('refresh stays quiet during a credential outage while explicit connection failures remain visible', async ({ page, context, baseURL }, info) => {
+test('reload waits for OpenRouter status and explicit connection failures remain visible', async ({ page, context, baseURL }, info) => {
     expect(process.env.OR3_CREDENTIAL_E2E).toBe('true');
     await signIn(context, baseURL!);
     const hydration: string[] = [];
-    const startupToasts: string[] = [];
+    let status: 'connected' | 'outage' | 'disconnected' = 'connected';
     let checks = 0;
+    let releaseStatus!: () => void;
+    const initialStatusGate = new Promise<void>(resolve => { releaseStatus = resolve; });
     page.on('console', message => {
         if (/hydration.*mismatch/i.test(message.text())) hydration.push(message.text());
     });
     await page.addInitScript(() => {
-        // Record short-lived notifications too, rather than passing once a toast expires.
-        (window as any).__startupToastSeen = false;
+        // Keep evidence even if a transient dialog or toast disappears.
         new MutationObserver(() => {
+            if (document.querySelector('[data-welcome-card]')) {
+                document.documentElement.dataset.openRouterWelcomeSeen = 'true';
+            }
             if (document.body?.textContent?.includes('OpenRouter connection unavailable')) {
-                (window as any).__startupToastSeen = true;
+                document.documentElement.dataset.openRouterErrorSeen = 'true';
             }
         }).observe(document, { childList: true, subtree: true });
     });
     await page.route('**/api/openrouter/credentials', async route => {
+        if (route.request().postDataJSON().operation !== 'status') return route.continue();
         checks++;
-        await route.fulfill({ status: 503, json: { message: 'Synthetic credential outage' } });
+        const result = status;
+        if (result === 'outage') return route.fulfill({ status: 503, json: { message: 'Synthetic credential outage' } });
+        await initialStatusGate;
+        return route.fulfill({ json: { connected: result === 'connected', persisted: false } });
     });
     await page.route('**/api/openrouter/oauth', route => route.fulfill({ status: 503, json: { message: 'Synthetic connection outage' } }));
-    for (let refresh = 0; refresh < 2; refresh++) {
-        if (refresh === 0) await page.goto('/chat?welcome=1');
-        else await page.reload();
-        await expect.poll(() => checks, { timeout: 30_000 }).toBeGreaterThan(refresh);
-        await expect(page.getByRole('button', { name: 'Connect with OpenRouter', exact: true })).toBeVisible({ timeout: 30_000 });
-        if (await page.evaluate(() => (window as any).__startupToastSeen)) startupToasts.push('OpenRouter connection unavailable');
-        expect.soft(startupToasts, 'passive startup checks do not notify over the welcome dialog').toEqual([]);
-        expect.soft(hydration, 'SSR refresh hydrates without mismatches').toEqual([]);
+    const input = page.getByRole('textbox', { name: 'Message input' });
+    const html = page.locator('html');
+    try {
+        await page.goto('/chat');
+        await expect.poll(() => checks).toBeGreaterThan(0);
+        await expect(input).toBeVisible();
+        // Hold the first status for the reported staging delay after the composer mounts.
+        await page.waitForTimeout(900);
+        expect(await html.getAttribute('data-open-router-welcome-seen')).toBeNull();
+    } finally {
+        releaseStatus();
     }
-    await page.screenshot({ path: info.outputPath('quiet-refresh.png') });
-    await info.attach('refresh-receipt', { contentType: 'application/json', body: JSON.stringify({ refreshes: 2, checks, startupToasts, hydration }) });
+    await expect(page.getByRole('button', { name: 'Disconnect from OpenRouter', exact: true })).toBeVisible();
+    expect(await html.getAttribute('data-open-router-welcome-seen')).toBeNull();
+
+    status = 'outage';
+    const statusOutage = page.waitForResponse(resp => new URL(resp.url()).pathname === '/api/openrouter/credentials' && resp.status() === 503);
+    await page.reload();
+    await statusOutage;
+    await expect(input).toBeVisible();
+    expect(await html.getAttribute('data-open-router-welcome-seen')).toBeNull();
+    expect(await html.getAttribute('data-open-router-error-seen')).toBeNull();
+    expect(hydration, 'SSR refresh hydrates without mismatches').toEqual([]);
+
+    await page.getByRole('button', { name: 'Connect to OpenRouter', exact: true }).click();
     await page.getByRole('button', { name: 'Connect with OpenRouter', exact: true }).click();
     await expect(page.getByText('OpenRouter connection unavailable', { exact: true })).toBeVisible();
     await expect(page.getByText('Refresh your session and try again, or contact the administrator.', { exact: true })).toBeVisible();
+
+    status = 'disconnected';
+    await page.evaluate(() => window.dispatchEvent(new Event('online')));
+    await expect(page.locator('[data-welcome-card]').getByRole('button', { name: 'Connect with OpenRouter', exact: true })).toBeVisible();
+    await info.attach('refresh-receipt', { contentType: 'application/json', body: JSON.stringify({ checks, hydration }) });
 });
 
 test('failed legacy migration retains the browser key and reports the requested save failure after hydration', async ({ page, context, baseURL }, info) => {

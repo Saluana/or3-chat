@@ -4,7 +4,6 @@ import { tmpdir } from 'node:os';
 import { readFile } from 'node:fs/promises';
 import { randomUUID, createHash } from 'node:crypto';
 import { defaultProjectSettings, PROJECT_POST_TYPES } from '../../shared/projects/workspace';
-import { completeWelcomeOnboarding } from '../../scripts/release/browser-onboarding.mjs';
 
 const adminCredentials = {
     username: process.env.OR3_ADMIN_E2E_USERNAME ?? '',
@@ -116,6 +115,8 @@ test.describe('OR3 Cloud Auth Integration', () => {
     });
 });
 
+// This profile intentionally has no personal credential vault. Use the
+// workspace controls, not the OpenRouter onboarding dialog, as readiness.
 if (process.env.OR3_WORKSPACE_CLOUD_E2E === 'true') {
     test('workspace cloud profile explains rejected webhook destinations safely', async ({ page }, info) => {
         const origin = new URL(info.project.use.baseURL!).origin;
@@ -125,7 +126,6 @@ if (process.env.OR3_WORKSPACE_CLOUD_E2E === 'true') {
         });
         expect(registered.ok()).toBe(true);
         await page.goto('/chat');
-        await completeWelcomeOnboarding(page);
         await page.getByRole('button', { name: 'Dashboard', exact: true }).click();
         await page.locator('#dashboard-sidebar, #dashboard-plugin-grid').getByRole('button', { name: 'Webhooks', exact: true }).click();
         await page.getByRole('dialog').getByRole('button', { name: 'Create webhook' }).click();
@@ -176,9 +176,8 @@ if (process.env.OR3_WORKSPACE_CLOUD_E2E === 'true') {
             expect(switched.ok(), await switched.text()).toBe(true);
             const viewer = await member.newPage();
             await viewer.goto('/chat');
-            await completeWelcomeOnboarding(viewer);
-            await expect(viewer.getByRole('button', { name: 'Create a document', exact: true })).toHaveCount(0);
             await expect(viewer.getByText('This workspace is view-only.', { exact: true })).toBeVisible();
+            await expect(viewer.getByRole('button', { name: 'Create a document', exact: true })).toHaveCount(0);
             await viewer.getByRole('button', { name: 'New', exact: true }).click();
             await expect(viewer.getByText('New document', { exact: true })).toHaveCount(0);
             await expect(viewer.getByText('New project', { exact: true })).toHaveCount(0);
@@ -284,7 +283,6 @@ if (process.env.OR3_WORKSPACE_CLOUD_E2E === 'true') {
         });
         expect(active.ok(), await active.text()).toBe(true);
         await page.goto('/');
-        await completeWelcomeOnboarding(page);
         await page.getByRole('button', { name: 'Files', exact: true }).click();
         await expect(page.getByRole('region', { name: 'Workspace Files', exact: true })).toBeVisible();
         // Warm production intake and preview chunks before cutting the network.
@@ -510,7 +508,6 @@ if (process.env.OR3_WORKSPACE_CLOUD_E2E === 'true') {
                 const viewerPage = await member.newPage();
                 await viewerPage.setViewportSize({ width: 1440, height: 1000 });
                 await viewerPage.goto('/chat');
-                await completeWelcomeOnboarding(viewerPage);
                 const viewerFilesButton = viewerPage.getByRole('complementary', { name: 'Navigation' })
                     .getByRole('button', { name: 'Files', exact: true });
                 await expect(viewerFilesButton).toBeVisible({ timeout: 45_000 });
