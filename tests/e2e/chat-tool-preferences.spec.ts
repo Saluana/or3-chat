@@ -125,3 +125,41 @@ test('chat tool suspension preserves selections, defaults and draft ownership ac
     await writeFile(receipt, JSON.stringify(requests, null, 2) + '\n');
     await info.attach('provider-requests', { contentType: 'application/json', path: receipt });
 });
+
+test('mobile chat settings keep one sheet height from settings to tool category and back', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 520 });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.route(/https?:\/\/(?!127\.0\.0\.1|localhost)/, route =>
+        route.fulfill({ json: { data: [], links: { next: null }, total_count: 0 } }),
+    );
+    await page.goto('/__or3-chat-tools-test?scenario=preferences');
+    await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible({ timeout: 60_000 });
+    await settings(page);
+
+    const sheet = page.getByRole('dialog', { name: 'Chat settings', exact: true });
+    await expect(sheet).toBeVisible();
+    const sheetHeight = () => sheet.evaluate(element => element.offsetHeight);
+    const initialHeight = await sheetHeight();
+
+    // Scroll to the lower actions without moving the sheet or its close button.
+    const close = sheet.getByRole('button', { name: 'Close chat settings' });
+    const lowerAction = sheet.getByRole('button', { name: 'Manage system prompts' });
+    await lowerAction.scrollIntoViewIfNeeded();
+    await expect(lowerAction).toBeInViewport({ ratio: 1 });
+    await expect(close).toBeInViewport({ ratio: 1 });
+
+    await sheet.getByRole('button', { name: 'Tools', exact: true }).click();
+    await expect(sheet.getByRole('heading', { name: 'Tools', exact: true })).toBeVisible();
+    expect.soft(await sheetHeight(), 'Tools list should not resize the sheet').toBe(initialHeight);
+
+    await sheet.getByRole('button', { name: /Other tools/ }).click();
+    await expect(sheet.getByRole('heading', { name: 'Other tools', exact: true })).toBeVisible();
+    expect.soft(await sheetHeight(), 'Tool category should not resize the sheet').toBe(initialHeight);
+
+    await sheet.getByRole('button', { name: 'Back to tools' }).click();
+    await sheet.getByRole('button', { name: 'Back to chat settings' }).click();
+    await expect(sheet.getByRole('switch', { name: 'Enable tools for this chat', exact: true })).toBeVisible();
+    expect(await sheetHeight()).toBe(initialHeight);
+    await close.click();
+    await expect(sheet).toBeHidden();
+});

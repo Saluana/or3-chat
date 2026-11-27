@@ -2,6 +2,7 @@
 import { nextTick, onMounted, onBeforeUnmount, ref } from 'vue';
 import { liveQuery, type Subscription } from 'dexie';
 import { useRoute } from '#imports';
+import { useResponsiveState } from '~/composables/core/useResponsiveState';
 import ChatContainer from '~/components/chat/ChatContainer.vue';
 import ChatSettingsPopover from '~/components/chat/ChatSettingsPopover.vue';
 import ModelVariantSelect from '~/components/chat/ModelVariantSelect.vue';
@@ -18,6 +19,8 @@ import type { ChatMessage } from '~/utils/chat/types';
 import type { ToolCallInfo } from '~/utils/chat/uiMessages';
 import { parseToolResultArtifact, readToolResultStorage } from '~~/shared/chat/tool-result-artifact';
 
+// The standalone fixture does not mount PageShell, which normally initializes breakpoints.
+useResponsiveState();
 const scenario = String(useRoute().query.scenario ?? 'normal');
 const showAiDefaults = ref(false);
 const ready = ref(false), threadId = ref(''), history = ref<ChatMessage[]>([]);
