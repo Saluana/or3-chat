@@ -210,12 +210,11 @@
                     </p>
                 </div>
                 <p
-                    v-else-if="responseStopped"
+                    v-else-if="responseNotice && completionNotice !== 'output_limit'"
                     role="status"
                     class="mb-3 text-sm opacity-70"
                 >
-                    Response stopped. You can retry or continue the
-                    conversation.
+                    {{ responseNotice }}
                 </p>
                 <span v-if="props.message.edited" class="block text-xs opacity-60">Edited</span>
                 <!-- Retro loader extracted to component -->
@@ -355,6 +354,13 @@
                     :tool-calls="props.message.toolCalls"
                     @resize="emit('content-resize')"
                 />
+                <p
+                    v-if="responseNotice && completionNotice === 'output_limit'"
+                    role="status"
+                    class="mt-2 text-sm opacity-70"
+                >
+                    {{ responseNotice }}
+                </p>
             </div>
             <!-- Editing surface -->
             <div
@@ -659,6 +665,7 @@ import { useMessageEditing } from '~/composables/chat/useMessageEditing';
 import ProjectMessageContext from '~/components/projects/ProjectMessageContext.vue';
 import { useMessageActions } from '~/composables/chat/useMessageActions';
 import { resolveMessageRenderer } from '~/composables/chat/message-renderers';
+import { readAiCompletionNotice } from '~~/shared/ai/events';
 import { buildUsageLabel } from '~/utils/chat/usage-label';
 import type { ToolCardMessage } from '~/utils/chat/tool-card-context';
 
@@ -679,10 +686,19 @@ const props = withDefaults(
     { interactive: true },
 );
 const toast = useToast();
-const responseStopped = computed(() => props.message.role === 'assistant' && !props.message.pending &&
-    ['stopped', 'Background response aborted', 'aborted'].includes(props.message.error ?? ''));
+const completionNotice = computed(() => readAiCompletionNotice(props.message.error));
+const responseNotice = computed(() => {
+    if (props.message.role !== 'assistant' || props.message.pending) return null;
+    switch (completionNotice.value) {
+        case 'output_limit': return 'Output limit reached.';
+        case 'provider_refused': return 'The provider refused or filtered this response.';
+        case 'provider_incomplete': return 'The provider ended this response early.';
+        default: return ['stopped', 'Background response aborted', 'aborted'].includes(props.message.error ?? '')
+            ? 'Response stopped. You can retry or continue the conversation.' : null;
+    }
+});
 const responseError = computed(() => props.message.role === 'assistant' && !props.message.pending &&
-    props.message.error && !responseStopped.value
+    props.message.error && !responseNotice.value
     ? presentError(props.message.errorEnvelope ?? props.message.error, { code: 'ERR_STREAM_FAILURE' }).message : null);
 const projectMessageContext = ref<InstanceType<typeof ProjectMessageContext>>();
 const customMessageRenderer = computed(
@@ -849,8 +865,9 @@ const roleVariant = computed<'user' | 'assistant'>(() =>
 const showContinueButton = computed(
     () =>
         props.message.role === 'assistant' &&
-        Boolean(props.message.error) &&
-        (props.message.text?.length ?? 0) > 0
+        !props.message.pending &&
+        Boolean(props.message.text?.trim()) &&
+        (completionNotice.value ? completionNotice.value === 'output_limit' : Boolean(props.message.error))
 );
 
 // The usage tooltip is a themed card (surface, border, elevation) rather than the

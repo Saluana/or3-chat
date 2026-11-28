@@ -38,7 +38,7 @@ import { captureChatMediaScope } from '~/utils/chat/media-scope';
 import type { ContextRequestPolicy } from '~~/shared/chat/context-budget';
 import type { Or3DB } from '~/db/client';
 import type { ChatMessage, ToolCall, ToolDefinition } from '~/utils/chat/types';
-import type { AiEvent } from '~~/shared/ai/events';
+import type { AiCompletionNotice, AiEvent } from '~~/shared/ai/events';
 import type { AiStreamRequest } from '~~/shared/ai/types';
 import { dataUrlToBlob, fetchImageBlob } from '~/utils/chat/files';
 import { TRANSPARENT_PIXEL_GIF_DATA_URI } from '~/utils/chat/imagePlaceholders';
@@ -334,7 +334,7 @@ type ForegroundInference = (request: ForegroundInferenceRequest, context: Foregr
  */
 export async function runForegroundStreamLoop(
     ctx: ForegroundStreamContext
-): Promise<void> {
+): Promise<AiCompletionNotice | undefined> {
     return createForegroundStreamLoop('openrouter', (request, operation) => openRouterStreamWithRetry({
         apiKey: ctx.apiKey,
         model: request.model.modelId,
@@ -352,7 +352,7 @@ export function createForegroundStreamLoop(routerId: string, streamInference: Fo
 }
 
 async function runForegroundWithRouter(ctx: ForegroundStreamContext, routerId: string,
-    streamInference: ForegroundInference): Promise<void> {
+    streamInference: ForegroundInference): Promise<AiCompletionNotice | undefined> {
     const chatLimits = ctx.chatLimits ?? DEFAULT_CHAT_LIMITS;
     const imageOwner = captureChatMediaScope(ctx.originDb, ctx.abortSignal, 'write');
     const admittedTools = snapshotToolDefinitions(ctx.tools);
@@ -430,8 +430,8 @@ async function runForegroundWithRouter(ctx: ForegroundStreamContext, routerId: s
         try {
             for await (const ev of stream) {
                 ctx.abortSignal.throwIfAborted();
-                if (ev.type === 'done') continue;
                 normalizedState = reduceNormalizedStreamEvent(normalizedState, ev);
+                if (ev.type === 'done') continue;
                 if (ev.type === 'provider_state') {
                     providerState = ev.items;
                 } else if (ev.type === 'usage') {
@@ -824,4 +824,5 @@ async function runForegroundWithRouter(ctx: ForegroundStreamContext, routerId: s
             }
         }
     }
+    return normalizedState.completionNotice;
 }

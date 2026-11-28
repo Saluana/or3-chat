@@ -670,6 +670,7 @@ async function initializeEditor(replaceExisting = false) {
             editorProps: {
                 attributes: {
                     'aria-label': 'Message input',
+                    'aria-multiline': 'true',
                     role: 'textbox',
                 },
                 // ProseMirror ignores preventDefault on paste; returning true is

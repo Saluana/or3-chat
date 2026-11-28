@@ -136,6 +136,11 @@ still match. Editing that request's prompt changes its edit marker and makes the
 saved payload ineligible for replay. An explicit Retry then builds a fresh request
 from the corrected prompt.
 
+When a model reaches its output limit, **Output limit reached** appears at the end of the reply, just above its actions.
+A reply with text offers **Continue** to append to the same message, including
+after reload. Another cutoff keeps the action available. A normal completion
+clears the notice. Filtered replies and empty output offer no Continue action.
+
 Continuation claims the assistant's current revision and live parent in one write
 transaction before provider dispatch. Another pane preparing that same revision
 cannot claim it again. Presentation and terminal-write ownership start only after

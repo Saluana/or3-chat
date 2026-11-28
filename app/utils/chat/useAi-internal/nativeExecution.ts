@@ -11,6 +11,7 @@ import { newId } from '~/db/util';
 import { serializeFileHashes } from '~/db/files-util';
 import { asAppError, reportError } from '~/utils/errors';
 import { errorDiagnostics } from '~~/shared/errors';
+import { readAiCompletionNotice } from '~~/shared/ai/events';
 import { ToolIterationLimitError } from '~~/shared/chat/stream-errors';
 import { contextAdmissionFailureReason } from '~~/shared/chat/context-budget';
 import { startBackgroundStream, prepareOpenRouterRequest } from '~/utils/chat/openrouterStream';
@@ -356,7 +357,7 @@ export function createNativeExecution(ports: {
                             ),
                             messageError:
                                 completion.status === 'complete'
-                                    ? null
+                                    ? readAiCompletionNotice(completion.error)
                                     : completion.status === 'aborted'
                                       ? 'stopped'
                                       : (completion.error ??
@@ -479,7 +480,7 @@ export function createNativeExecution(ports: {
                 return { status: 'detached', requestId, reason: 'detached',
                     userMessageId: userDbMsg.id, assistantMessageId: assistantDbMsg.id };
             }
-            await runForegroundStreamLoop({
+            const completionNotice = await runForegroundStreamLoop({
                 chatLimits,
                 apiKey: streamApiKey,
                 modelId,
@@ -539,6 +540,7 @@ export function createNativeExecution(ports: {
             requestScope.message = current;
             const finalization = await finalizeRequest(requestScope, {
                 outcome: 'completed',
+                messageError: completionNotice,
                 content: incoming,
                 reasoning: current.reasoning_text ?? null,
                 toolCalls: current.toolCalls ?? null,

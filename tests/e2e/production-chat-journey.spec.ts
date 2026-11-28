@@ -3060,6 +3060,56 @@ test.describe('production chat journey', () => {
         await page.reload();
         await expect(page.getByText('Partial response before stop.')).toBeVisible();
     });
+    test('continues a provider-capped reply in place after reload', async ({ page }, info) => {
+        test.setTimeout(120_000);
+        await openChat(page, '?turns=1');
+        await send(page, 'journey:output-cap');
+        const cutoff = page.getByRole('status').filter({ hasText: 'Output limit reached' });
+        const continueButton = page.getByRole('button', { name: 'Continue generation', exact: true });
+        const firstReply = turnRow(page, 'The trip started');
+        await expect(firstReply).toBeVisible();
+        const firstNotice = firstReply.getByRole('status').filter({ hasText: 'Output limit reached' });
+        await expect(firstNotice).toBeVisible();
+        const textBox = (await firstReply.getByText('The trip started', { exact: true }).boundingBox())!;
+        const noticeBox = (await firstNotice.boundingBox())!;
+        const continueBox = (await continueButton.boundingBox())!;
+        expect(noticeBox.y).toBeGreaterThanOrEqual(textBox.y + textBox.height);
+        expect(continueBox.y).toBeGreaterThanOrEqual(noticeBox.y + noticeBox.height);
+        const replyId = await firstReply.getAttribute('data-msg-id');
+        expect(replyId).toBeTruthy();
+
+        await page.reload();
+        await expect(firstReply).toHaveAttribute('data-msg-id', replyId!);
+        await continueButton.click();
+        const extendedReply = turnRow(page, 'The trip started by train and ordered');
+        await expect(extendedReply.getByRole('status').filter({ hasText: 'Output limit reached' })).toBeVisible();
+        await expect(extendedReply).toHaveAttribute('data-msg-id', replyId!);
+
+        await page.reload();
+        await continueButton.click();
+        const finishedReply = turnRow(page, 'The trip started by train and ordered dinner.');
+        await expect(finishedReply).toHaveAttribute('data-msg-id', replyId!);
+        await expect(page.getByRole('button', { name: 'Send message' })).toBeVisible();
+        await expect(continueButton).toHaveCount(0);
+        await expect(cutoff).toHaveCount(0);
+        await page.reload();
+        await expect(finishedReply).toHaveAttribute('data-msg-id', replyId!);
+        await expect(cutoff).toHaveCount(0);
+
+        await send(page, 'journey:output-cap empty');
+        await expect(cutoff).toHaveCount(1);
+        await expect(continueButton).toHaveCount(0);
+        await send(page, 'journey:output-cap filtered');
+        const filteredReply = turnRow(page, 'The provider filtered this reply.');
+        await expect(filteredReply.getByRole('status').filter({ hasText: 'provider refused or filtered' })).toBeVisible();
+        await expect(continueButton).toHaveCount(0);
+        await page.reload();
+        await expect(filteredReply.getByRole('status').filter({ hasText: 'provider refused or filtered' })).toBeVisible();
+        await expect(continueButton).toHaveCount(0);
+        await info.attach('output-limit-requests', { contentType: 'application/json',
+            body: JSON.stringify((await turnRequests(page)).map(request => request.filter(message => message.role === 'assistant'))) });
+    });
+
     test('recovers a partial foreground response after refresh during streaming', async ({ page }) => {
         test.setTimeout(120_000);
         await openChat(page);

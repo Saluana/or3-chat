@@ -238,8 +238,6 @@ function forwardResize(payload: ResizePayload) {
 }
 
 :deep(.blank2-chat-dropper .ProseMirror p.is-editor-empty:first-child::before) {
-    color: color-mix(in srgb, var(--md-on-surface-variant) 78%, transparent);
-    opacity: 1;
     font-weight: 400;
     font: inherit;
     letter-spacing: inherit;

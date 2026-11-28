@@ -527,6 +527,16 @@ function installDeterministicFetch(): void {
                         enqueue(sseChunk(' Ready to recover.'));
                         await delay(10_000);
                         enqueue(sseChunk(' Late response from the old page.'));
+                    } else if (text.startsWith('journey:output-cap') || text.includes('<<CONTEXT>>\nThe trip')) {
+                        const [content, finishReason] = text.includes('and ordered')
+                            ? ['>> dinner.', 'stop']
+                            : text.includes('<<CONTEXT>>')
+                              ? ['>> by train and ordered', 'length']
+                              : text.endsWith(' filtered') ? ['The provider filtered this reply.', 'content_filter']
+                                : text.endsWith(' empty') ? ['', 'length']
+                                  : ['The trip started', 'length'];
+                        enqueue(sseChunk(content));
+                        enqueue(encoder.encode(`data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: finishReason }] })}\n\n`));
                     } else if (text.includes('journey:stop')) {
                         enqueue(sseChunk('Partial response before stop.'));
                         await delay(1_200);

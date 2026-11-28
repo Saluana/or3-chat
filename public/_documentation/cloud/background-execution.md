@@ -222,6 +222,10 @@ deployed backend has this method.
 6. Viewers receive live updates through SSE (`/api/jobs/:id/stream`) and/or polling (`/api/jobs/:id/status?offset=N`).
 7. On terminal state (`complete|error|aborted`), status is persisted and notifications are emitted when no viewers are attached.
 
+An answer stopped by a model output limit keeps its partial text and the cutoff
+notice in canonical history. Continue can append to a nonempty answer after
+reconnecting or reloading.
+
 Native context metadata remains in the existing durable execution body through
 tool checkpoints and worker recovery. Every native tool-loop provider request
 checks the full payload against independently resolved capacity and the captured

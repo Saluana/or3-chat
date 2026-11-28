@@ -44,6 +44,17 @@ describe('OpenAI Responses stream contract', () => {
             .rejects.toThrow('Provider overloaded');
     });
 
+    it.each([
+        ['max_output_tokens', 'output_limit'],
+        ['content_filter', 'provider_refused'],
+        ['max_messages', 'provider_incomplete'],
+    ])('preserves the terminal reason for an incomplete %s response', async (reason, notice) => {
+        const bytes = new TextEncoder().encode(responseFrame({ type: 'response.output_text.delta', delta: 'Partial answer' })
+            + responseFrame({ type: 'response.incomplete', response: { incomplete_details: { reason } } }));
+        expect(await readResponseEvents([bytes])).toEqual([{ type: 'text', text: 'Partial answer' },
+            { type: 'done', notice, truncated: true, ...(notice === 'provider_refused' ? { refused: true } : {}) }]);
+    });
+
     it('ends after a terminal response', async () => {
         expect(await readResponseEvents([new TextEncoder().encode(responseFrame(completedResponse)
             + responseFrame({ type: 'response.output_text.delta', delta: 'late text' }))])).toEqual([{ type: 'done' }]);

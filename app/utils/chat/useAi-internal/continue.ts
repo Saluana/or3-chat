@@ -5,6 +5,7 @@ import { answerRevisionOf, selectedAnswerVersionRows } from '~/utils/chat/answer
 import { ChatContextAdmissionError, contextAdmissionFailureReason, type ContextRequestPolicy } from '~~/shared/chat/context-budget';
 import { BackgroundTrackerConflict } from './background-tracker-conflict';
 import { resolveOpenRouterLegacySelection } from '~~/shared/openrouter/selection';
+import { readAiCompletionNotice } from '~~/shared/ai/events';
 import { isOpenAiModel } from '~~/shared/openai/models';
 import { DEFAULT_CHAT_LIMITS, type ChatLimits } from '~~/shared/chat/chat-limits';
 import { resolveReasoningConfig } from '~~/shared/openrouter/reasoning';
@@ -272,6 +273,9 @@ export async function continueMessageImpl(
             return;
         }
 
+        const priorNotice = readAiCompletionNotice(target.error);
+        if (priorNotice && priorNotice !== 'output_limit') return;
+
         const inMemoryText =
             ctx.tailAssistant.value?.id === target.id ? ctx.tailAssistant.value.text : '';
         const normalizedTarget = normalizeStreamingMessage({
@@ -282,7 +286,7 @@ export async function continueMessageImpl(
             }).content,
         });
         const existingText = normalizedTarget.text;
-        if (!existingText) return;
+        if (!existingText.trim()) return;
 
         const DexieMod = (await import('dexie')).default;
         const admissionThread = await originDb.threads.get(originThreadId);
@@ -631,7 +635,7 @@ export async function continueMessageImpl(
                     })),
                     messageError:
                         completion.status === 'complete'
-                            ? null
+                            ? readAiCompletionNotice(completion.error)
                             : completion.status === 'aborted'
                               ? 'stopped'
                               : (completion.error ??
@@ -722,7 +726,10 @@ export async function continueMessageImpl(
         try {
             for await (const ev of stream) {
                 if (!ownsThread()) throw new ContinuationOwnershipLost();
-                if (ev.type === 'done') continue;
+                if (ev.type === 'done') {
+                    outputBudget = reduceNormalizedStreamEvent(outputBudget, ev);
+                    continue;
+                }
                 if (ev.type === 'usage') {
                     const measured = readMeasuredRequestUsage(ev.usage, ev.requestUsage);
                     if (measured) { requestUsage = { ...measured, iteration: 1, totals: addUsageTotals(priorUsageTotals, ev.usage) }; writeCoalescer.markDirty(); }
@@ -778,7 +785,7 @@ export async function continueMessageImpl(
                 content: current.text,
                 reasoning: current.reasoning_text ?? null,
                 toolCalls: current.toolCalls ?? null,
-                messageError: stopped ? 'stopped' : null,
+                messageError: stopped ? 'stopped' : outputBudget.completionNotice,
             });
             if (finalization.persistenceError || finalization.effectError)
                 reportError(

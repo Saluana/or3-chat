@@ -1168,6 +1168,18 @@ describe('background usage through terminal history', () => {
     const creditRefusal = (affordable: number) => new Response(JSON.stringify({ error: { code: 402,
         message: `This request requires more credits, or fewer max_tokens. You requested up to 4096 tokens, but can only afford ${affordable}.` } }),
         { status: 402, headers: { 'Content-Type': 'application/json' } });
+    it.each([
+        [false, 'length', 'output_limit'], [true, 'length', 'output_limit'],
+        [false, 'content_filter', 'provider_refused'],
+    ] as const)('commits the provider cutoff or refusal to canonical history (tools %s, finish %s)', async (withTools, finishReason, notice) => {
+        const { jobId, context } = await admitted(withTools);
+        vi.stubGlobal('fetch', vi.fn(async () => new Response(makeSseStream([
+            { choices: [{ delta: { content: 'Partial reply' }, finish_reason: finishReason }] },
+        ]))));
+        await executeBackgroundJob(jobId, context, memoryJobProvider);
+        const { snapshot } = await terminal(jobId);
+        expect(snapshot).toMatchObject({ status: 'complete', content: 'Partial reply', error: notice });
+    });
     it.each([false, true])('retries a default reply allowance once at the affordable size (tools: %s)', async (withTools) => {
         const { jobId, context } = await admitted(withTools, { version: 1, user_max_context_tokens: null, requested_completion_tokens: null });
         const sent: Record<string, unknown>[] = [];

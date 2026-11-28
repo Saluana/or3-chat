@@ -1,3 +1,4 @@
+import { readAiCompletionNotice } from '~~/shared/ai/events';
 import { invalidateFirstBindEligibility, readHistory } from '~/core/sync/history-incarnation';
 import { presentError } from '~~/shared/errors';
 import { readRequestUsage, type RequestUsage } from '~~/shared/chat/compaction';
@@ -376,7 +377,7 @@ export async function persistBackgroundJobUpdate(
             ? presentError(status.error, { code: 'ERR_STREAM_FAILURE' }).message
             : status.status === 'aborted'
               ? 'Background response aborted'
-              : null;
+              : status.status === 'complete' ? readAiCompletionNotice(status.error) ?? null : null;
     // One canonical projection for every terminal state: message state,
     // generation state, and background job status must never disagree.
     const nextGenerationState =
