@@ -2242,7 +2242,7 @@ test('Files stores active content as download-only bytes without rendering it', 
     }
 });
 
-async function openChat(page: Page): Promise<void> {
+async function openChat(page: Page, query = ''): Promise<void> {
     await page.context().route('**/*', route => new URL(route.request().url()).hostname === '127.0.0.1'
         ? route.continue() : route.abort('blockedbyclient'));
     // Catalog loading can start before the fixture component mounts and
@@ -2250,7 +2250,7 @@ async function openChat(page: Page): Promise<void> {
     await page.route('**/api/__or3-e2e/models*', (route) =>
         route.fulfill({ json: { data: [], links: { next: null }, total_count: 0 } })
     );
-    await page.goto(chatPage);
+    await page.goto(chatPage + query);
     await expect(page.getByTestId('production-chat-journey')).toBeVisible({
         timeout: 30_000,
     });
@@ -2303,7 +2303,210 @@ async function waitForDurableReply(page: Page, content: string): Promise<void> {
     }, { threadId, content }), { timeout: 5_000 }).toBe(true);
 }
 
+function turnRow(page: Page, text: string) {
+    return page.locator('[data-msg-id]').filter({ has: page.getByText(text, { exact: true }) });
+}
+
+function turnRequests(page: Page): Promise<Array<Array<{ role: string; text: string }>>> {
+    return page.evaluate(() => JSON.parse(localStorage.getItem('or3:e2e:turn-requests') ?? '[]'));
+}
+
+async function editTurn(page: Page, oldText: string, newText: string, action = 'Save') {
+    const row = turnRow(page, oldText);
+    await row.getByRole('button', { name: 'Edit message', exact: true }).click();
+    // The original text leaves the DOM while editing.
+    const editor = page.locator('.cm-editor-actions').locator('..');
+    await editor.locator('[contenteditable="true"]').fill(newText);
+    await editor.getByRole('button', { name: action, exact: true }).click();
+}
+
 test.describe('production chat journey', () => {
+    test('latest-turn actions preserve three turns and send edited history on the next send', async ({ page }, info) => {
+        test.setTimeout(120_000);
+        await page.setViewportSize({ width: 1280, height: 1200 });
+        await openChat(page, '?turns=1');
+        const prompts = ['First turn', 'Second turn', 'Third turn'];
+        for (const prompt of prompts) {
+            await send(page, prompt);
+            await expect(turnRow(page, 'Reply to ' + prompt)).toBeVisible();
+        }
+        const retry = { name: 'Retry message', exact: true };
+        await expect(page.getByRole('button', retry)).toHaveCount(1);
+        await expect(turnRow(page, 'Reply to Third turn').getByRole('button', retry)).toBeVisible();
+        await expect(turnRow(page, 'Reply to First turn').getByRole('button', { name: 'Branch conversation' })).toBeVisible();
+
+        const edited = page.getByText('Edited', { exact: true });
+        await editTurn(page, prompts[0]!, 'Discarded correction', 'Cancel');
+        await editTurn(page, prompts[0]!, prompts[0]!);
+        await expect(edited).toHaveCount(0);
+        expect(await turnRequests(page)).toHaveLength(3);
+        const corrected = 'First turn corrected';
+        await editTurn(page, prompts[0]!, corrected);
+        await expect(turnRow(page, corrected).getByText('Edited', { exact: true })).toBeVisible();
+        await editTurn(page, 'Reply to First turn', 'Corrected first reply');
+        await expect(turnRow(page, 'Corrected first reply').getByText('Edited', { exact: true })).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeVisible();
+        expect(await turnRequests(page)).toHaveLength(3);
+
+        await page.reload();
+        await expect(edited).toHaveCount(2);
+        const expected = [corrected, 'Corrected first reply', 'Second turn', 'Reply to Second turn', 'Third turn', 'Reply to Third turn'];
+        const rows = page.locator('[data-msg-id]');
+        await expect(rows).toHaveCount(expected.length);
+        for (const [index, text] of expected.entries()) await expect(rows.nth(index).getByText(text, { exact: true })).toBeVisible();
+        await send(page, 'Fourth turn');
+        await expect(turnRow(page, 'Reply to Fourth turn')).toBeVisible();
+        const requests = await turnRequests(page);
+        expect(requests).toHaveLength(4);
+        expect(requests.at(-1)?.filter(message => message.role !== 'system').map(message => message.text)).toEqual([...expected, 'Fourth turn']);
+        await info.attach('edited-history-request', { contentType: 'application/json', body: JSON.stringify(requests.at(-1)) });
+    });
+
+    test('answer revisions keep the selected reply and all versions after reload', async ({ page }, info) => {
+        test.setTimeout(120_000);
+        await page.setViewportSize({ width: 1280, height: 1100 });
+        await page.context().addCookies([{ name: 'or3_active_theme', value: 'blank', domain: '127.0.0.1', path: '/' }]);
+        await page.addInitScript(() => localStorage.setItem('activeTheme', 'blank'));
+        await openChat(page, '?turns=1&revisions=1');
+        await expect(page.locator('html')).toHaveAttribute('data-theme', 'blank');
+        await send(page, 'Earlier prompt');
+        const prompt = 'Compare answer versions';
+        const reply = (version: number) => 'Reply to ' + prompt + ' — version ' + version;
+        const retry = page.getByRole('button', { name: 'Retry message', exact: true });
+        const previous = page.getByRole('button', { name: 'Previous answer version', exact: true });
+        const next = page.getByRole('button', { name: 'Next answer version', exact: true });
+        await send(page, prompt);
+        await expect(turnRow(page, reply(1))).toBeVisible();
+        await retry.click();
+        await expect(turnRow(page, reply(2))).toBeVisible();
+        await expect(next).toBeDisabled();
+        await previous.click();
+        await expect(turnRow(page, reply(1))).toBeVisible();
+        await expect(previous).toBeDisabled();
+        expect(await turnRequests(page)).toHaveLength(3);
+
+        // Retrying from an older selection appends a third version.
+        await retry.click();
+        await expect(turnRow(page, reply(3))).toBeVisible();
+        await previous.click();
+        await expect(turnRow(page, reply(2))).toBeVisible();
+        await page.reload();
+        await expect(turnRow(page, reply(2))).toBeVisible();
+        await expect(turnRow(page, prompt)).toHaveCount(1);
+        await expect(turnRow(page, 'Reply to Earlier prompt — version 1')).toBeVisible();
+        await previous.click();
+        await expect(turnRow(page, reply(1))).toBeVisible();
+        await next.click();
+        await next.click();
+        await expect(turnRow(page, reply(3))).toBeVisible();
+        await previous.click();
+        await expect(turnRow(page, reply(2))).toBeVisible();
+        expect(await turnRequests(page)).toHaveLength(4);
+
+        const pager = page.getByRole('group', { name: 'Answer versions', exact: true });
+        const count = pager.getByText('2 / 3', { exact: true });
+        const answerRow = turnRow(page, reply(2));
+        const branchButton = answerRow.getByRole('button', { name: 'Branch conversation' });
+        for (const width of [390, 1280]) {
+            await page.setViewportSize({ width, height: 1100 });
+            await expect(count).toBeVisible();
+            await expect.poll(() => count.evaluate(label => {
+                const range = document.createRange();
+                range.selectNodeContents(label);
+                return range.getClientRects().length;
+            })).toBe(1);
+            const bounds = (await pager.boundingBox())!;
+            const left = (await previous.boundingBox())!;
+            const right = (await next.boundingBox())!;
+            const label = (await count.boundingBox())!;
+            const branch = (await branchButton.boundingBox())!;
+            expect(left.x + left.width).toBeLessThanOrEqual(label.x);
+            expect(label.x + label.width).toBeLessThanOrEqual(right.x);
+            expect(bounds.x + bounds.width).toBeLessThanOrEqual(width);
+            expect(branch.x + branch.width <= bounds.x || branch.y + branch.height <= bounds.y).toBe(true);
+            const branchBackground = () => branchButton.evaluate(async button => {
+                await Promise.allSettled(button.getAnimations().map(animation => animation.finished));
+                return getComputedStyle(button).backgroundColor;
+            });
+            await page.mouse.move(0, 0);
+            const idleBackground = await branchBackground();
+            await branchButton.hover();
+            await expect.poll(branchBackground).not.toBe(idleBackground);
+            const actionHover = await branchBackground();
+            await previous.hover();
+            await expect(previous).toHaveCSS('background-color', actionHover);
+            expect({ width: left.width, height: left.height }).toEqual({ width: branch.width, height: branch.height });
+            await info.attach(`revision-controls-${width}`, { body: await answerRow.screenshot(), contentType: 'image/png' });
+        }
+
+        await send(page, 'Follow up on the selected answer');
+        await expect(turnRow(page, 'Reply to Follow up on the selected answer — version 1')).toBeVisible();
+        const requests = await turnRequests(page);
+        expect(requests).toHaveLength(5);
+        expect(requests.at(-1)?.filter(message => message.role === 'assistant').map(message => message.text))
+            .toEqual(['Reply to Earlier prompt — version 1', reply(2)]);
+        await page.reload();
+        await expect(turnRow(page, reply(2))).toBeVisible();
+        await expect(next).toBeEnabled();
+        await expect(retry).toHaveCount(1);
+        await info.attach('selected-answer-context', { contentType: 'application/json', body: JSON.stringify(requests.at(-1)) });
+    });
+
+    test('editing a failed prompt replaces only its obsolete saved request on explicit Retry', async ({ page }, info) => {
+        test.setTimeout(120_000);
+        await openChat(page, '?turns=1&context=1');
+        const initial = 'journey:context-reject before correction';
+        const corrected = 'Corrected failed prompt';
+        await send(page, initial);
+        const failed = page.getByRole('alert', { name: 'Response failed', exact: true });
+        await expect(failed).toBeVisible();
+        await editTurn(page, initial, corrected);
+        await expect(turnRow(page, corrected)).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeVisible();
+        expect(await turnRequests(page)).toHaveLength(1);
+
+        await page.reload();
+        const retry = page.getByRole('button', { name: 'Retry message', exact: true });
+        await expect(retry).toHaveCount(1);
+        await retry.click();
+        await expect(turnRow(page, 'Reply to ' + corrected)).toBeVisible();
+        const requests = await turnRequests(page);
+        expect(requests).toHaveLength(2);
+        expect(requests[1]?.filter(message => message.role === 'user').map(message => message.text)).toEqual([corrected]);
+        await expect(turnRow(page, initial)).toHaveCount(0);
+        await expect(failed).toHaveCount(0);
+        await info.attach('corrected-retry-request', { contentType: 'application/json', body: JSON.stringify(requests[1]) });
+    });
+
+    test('a retry waiting in one pane expires when another pane sends a newer turn', async ({ page, context }, info) => {
+        test.setTimeout(120_000);
+        await openChat(page, '?turns=1&holdRetry=1');
+        await send(page, 'Previously latest turn');
+        await expect(turnRow(page, 'Reply to Previously latest turn')).toBeVisible();
+        const peer = await context.newPage();
+        try {
+            await openChat(peer, '?turns=1');
+            await expect(turnRow(peer, 'Reply to Previously latest turn')).toBeVisible();
+            const retry = { name: 'Retry message', exact: true };
+            await turnRow(page, 'Reply to Previously latest turn').getByRole('button', retry).click();
+            await expect(page.getByTestId('production-chat-journey')).toHaveAttribute('data-retry-held', 'true');
+            await send(peer, 'New turn from another pane');
+            await expect(turnRow(peer, 'Reply to New turn from another pane')).toBeVisible();
+            await waitForDurableReply(peer, 'Reply to New turn from another pane');
+            await page.evaluate(() => window.dispatchEvent(new Event('or3:e2e:release-retry')));
+            await expect(page.getByText('Retry did not start', { exact: true })).toBeVisible();
+            await expect(turnRow(page, 'Reply to Previously latest turn')).toBeVisible();
+            const requests = await turnRequests(page);
+            expect(requests).toHaveLength(2);
+            await page.reload();
+            await expect(turnRow(page, 'Reply to Previously latest turn')).toBeVisible();
+            await expect(turnRow(page, 'Reply to New turn from another pane').getByRole('button', retry)).toBeVisible();
+            await info.attach('stale-retry-requests', { contentType: 'application/json', body: JSON.stringify(requests) });
+        } finally {
+            await peer.close();
+        }
+    });
+
     test('chat keeps literal LaTeX in code while rendering prose math after reload', async ({ page }, info) => {
         test.setTimeout(120_000);
         await openChat(page);
@@ -3182,8 +3385,9 @@ test.describe('production chat journey', () => {
         await info.attach('failed-response', { path: shot, contentType: 'image/png' });
         await page.reload();
         await expect(failedResponse).toBeVisible();
-        const retry = page.getByRole('button', { name: 'Retry message', exact: true }).last();
-        await expect(retry).toBeVisible();
+        const retry = page.getByRole('button', { name: 'Retry message', exact: true });
+        await expect(retry).toHaveCount(1);
+        await expect(page.locator('[data-msg-id]').filter({ has: failedResponse }).getByRole('button', { name: 'Retry message', exact: true })).toBeVisible();
         await retry.click();
 
         await expect(page.getByText('Recovered after retry.')).toBeVisible();

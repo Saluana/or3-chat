@@ -24,8 +24,8 @@ import {
     setGlobalMultiPaneApi,
 } from '~/utils/multiPaneApi';
 import { deriveMessageContent } from '~/utils/chat/messages';
+import { projectAnswerVersionRows } from '~/utils/chat/answer-revisions';
 import {
-    isSupersededMessage,
     projectTranscriptForOpenRouter,
     storedMessagesToCanonicalTranscript,
 } from '~/utils/chat/transcript';
@@ -182,9 +182,6 @@ async function loadMessagesInDb(id: string, db: Or3DB): Promise<MultiPaneMessage
             continue;
         }
 
-        // Superseded retry turns remain in Dexie for sync/audit, but
-        // must not reappear when a pane reloads its conversation.
-        if (msg.deleted || isSupersededMessage(msg)) continue;
         validRows.push(msg);
     }
 
@@ -194,15 +191,16 @@ async function loadMessagesInDb(id: string, db: Or3DB): Promise<MultiPaneMessage
             { id: right.id, index: Number.isFinite(right.index) ? right.index : 0, order_key: right.order_key ?? '' }
         )
     );
+    const visibleRows = projectAnswerVersionRows(validRows);
     // Pane seeds skip the controller's history reload. Reconcile their
     // separate tool rows through the same canonical projection first.
     const canonicalById = new Map(
         projectTranscriptForOpenRouter(
-            storedMessagesToCanonicalTranscript(validRows)
+            storedMessagesToCanonicalTranscript(visibleRows)
         ).map((message) => [message.id, message])
     );
     const result: MultiPaneMessage[] = [];
-    for (const row of validRows) {
+    for (const row of visibleRows) {
         const canonicalCalls = canonicalById.get(row.id)?.data?.tool_calls;
         const storedCalls = new Map<string, Record<string, unknown>>();
         const rawCalls: unknown = row.data?.tool_calls;
@@ -227,6 +225,7 @@ async function loadMessagesInDb(id: string, db: Or3DB): Promise<MultiPaneMessage
         });
 
         result.push({
+            ...(row.answerVersions ? { answerVersions: row.answerVersions } : {}),
             role: row.role as 'user' | 'assistant' | 'system' | 'tool',
             content,
             file_hashes: row.file_hashes,

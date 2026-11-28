@@ -2,9 +2,10 @@ import type { TypedHookEngine } from '~/core/hooks/typed-hooks';
 import type { ChatRequest as ChatRequestScope } from './requestController';
 import type { NativeExecutionInput, StoredMessage } from './nativeExecutionTypes';
 import type { NativeRecoveryCheckpoint } from '~/utils/chat/native-recovery';
-import { recoverySourceFingerprint, recoveryProjectFingerprint } from '~/utils/chat/native-recovery';
+import { recoverySourceFingerprint, recoveryProjectFingerprint, recoveryUserEditId } from '~/utils/chat/native-recovery';
 import type { SendMessageParams, SendResult } from '~/utils/chat/types';
 import { getDb, getWorkspaceGeneration } from '~/db/client';
+import { latestRetryUser } from '~/db/messages';
 import { newId, getWriteTxTableNames } from '~/db/util';
 import { useAiSettings } from '~/composables/chat/useAiSettings';
 import { useModelStore } from '~/composables/chat/useModelStore';
@@ -77,7 +78,7 @@ export function createNativeRecovery(ports: {
             userMessageId: checkpoint.user_message_id, assistantMessageId: checkpoint.assistant_message_id });
         const [userDbMsg, savedAssistant] = await Promise.all([db.messages.get(checkpoint.user_message_id), db.messages.get(checkpoint.assistant_message_id)]);
         if (!owns()) return { status: 'aborted', requestId, reason: 'aborted' };
-        if (!userDbMsg || userDbMsg.deleted || userDbMsg.role !== 'user' || userDbMsg.thread_id !== checkpoint.thread_id
+        if (!userDbMsg || recoveryUserEditId(userDbMsg) !== checkpoint.user_edit_id || userDbMsg.deleted || userDbMsg.role !== 'user' || userDbMsg.thread_id !== checkpoint.thread_id
             || !savedAssistant || savedAssistant.deleted || savedAssistant.pending || savedAssistant.role !== 'assistant'
             || savedAssistant.thread_id !== checkpoint.thread_id || typeof (savedAssistant.data as Record<string, unknown> | null)?.background_job_id === 'string'
             || typeof (savedAssistant.data as Record<string, unknown> | null)?.superseded_by === 'string')
@@ -158,6 +159,11 @@ export function createNativeRecovery(ports: {
         const reset = await db.transaction('rw', [...new Set([...getWriteTxTableNames(db, 'messages', { includeTombstones: true }), 'threads', 'projects', 'posts', 'chat_request_recoveries'])], async () => {
             if (!owns() || useAiSettings().settings.value.masterSystemPrompt !== masterPrompt || ports.taskPrompt() !== taskPrompt
                 || checkpoint.source_fingerprint !== await recoverySourceFingerprint(db, checkpoint.thread_id, savedAssistant.id, masterPrompt, taskPrompt)) return false;
+            if (params.retryRecoveryRequestId) {
+                const latest = await latestRetryUser(db, checkpoint.thread_id);
+                const currentCheckpoint = await db.chat_request_recoveries.get(checkpoint.thread_id);
+                if (latest?.id !== userDbMsg.id || currentCheckpoint?.request_id !== checkpoint.request_id) return false;
+            }
             const current = await db.messages.get(savedAssistant.id);
             if (!current || current.clock !== savedAssistant.clock || current.pending || current.deleted) return false;
             await updateMessageRecord(db, savedAssistant.id, { pending: true, error: null, stream_id: newStreamId,

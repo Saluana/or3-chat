@@ -38,6 +38,8 @@ import {
 } from './schema';
 import type { MessageEntity } from '../core/hooks/hook-types';
 import { serializeFileHashes } from './files-util';
+import { isSupersededMessage } from '~/utils/chat/transcript';
+import { answerRevisionData, answerRevisionOf } from '~/utils/chat/answer-revisions';
 
 export function compareMessageOrder(
     a: Pick<Message, 'order_key' | 'id'> & { index?: number },
@@ -47,6 +49,13 @@ export function compareMessageOrder(
     if (indexOrder !== 0) return indexOrder;
     const keyOrder = (a.order_key ?? '').localeCompare(b.order_key ?? '');
     return keyOrder !== 0 ? keyOrder : a.id.localeCompare(b.id);
+}
+
+// Read durable chat order directly, including writes the current pane has not observed.
+export async function latestRetryUser(db: Or3DB, threadId: string): Promise<Message | undefined> {
+    const rows = await db.messages.where('thread_id').equals(threadId).toArray();
+    return rows.sort(compareMessageOrder)
+        .findLast(row => row.role === 'user' && !row.deleted && !isSupersededMessage(row));
 }
 
 // Convert Message schema type to MessageEntity for hooks
@@ -611,21 +620,35 @@ async function appendMessageGroupToDb(
     companion: MessageCreate | undefined,
     options: { replace?: readonly MessageRevision[]; onCommitted?: (user: Message, assistant: Message) => void },
 ): Promise<[Message, Message?]> {
-    const prepared = await prepareMessageAppend(input);
-    const preparedCompanion = companion ? await prepareMessageAppend(companion) : undefined;
+    const originals = options.replace?.length
+        ? await db.messages.bulkGet(options.replace.map(row => row.id)) : [];
+    const retryUser = originals.find(row => row?.role === 'user');
+    const groupId = answerRevisionOf(retryUser)?.groupId
+        ?? (originals.some(row => row?.role === 'assistant') ? retryUser?.id : undefined);
+    const versionId = groupId ? input.id ?? newId() : undefined;
+    const tag = (message: MessageCreate): MessageCreate => {
+        if (!groupId || !versionId) return message;
+        const editId = dataRecord(retryUser?.data).edit_id;
+        return { ...message, ...(message.role === 'user' ? { id: versionId } : {}),
+            data: { ...dataRecord(message.data), ...answerRevisionData(groupId, versionId),
+            ...(message.role === 'user' && typeof editId === 'string' ? { edit_id: editId } : {}) } };
+    };
+    const prepared = await prepareMessageAppend(tag(input));
+    const preparedCompanion = companion ? await prepareMessageAppend(tag(companion)) : undefined;
     if (preparedCompanion && preparedCompanion.value.thread_id !== prepared.value.thread_id)
         throw new Error('Turn messages must belong to the same thread.');
     const hooks = useHooks();
     const replacements: { expected: MessageRevision; row: Message }[] = [];
-    for (const expected of options.replace ?? []) {
-        const old = await db.messages.get(expected.id);
+    for (const [index, expected] of (options.replace ?? []).entries()) {
+        const old = originals[index];
         if (!old || old.deleted || old.thread_id !== prepared.value.thread_id
             || old.clock !== expected.clock || old.hlc !== expected.hlc)
             throw new Error('Retry target changed; reload the conversation.');
-        const data = { ...dataRecord(old.data), superseded_by: prepared.value.id, generation_state: 'superseded' };
-        const filtered = await hooks.applyFilters('db.messages.upsert:filter:input', { ...old, data });
+        const archive = { superseded_by: prepared.value.id, ...(groupId && retryUser
+            ? answerRevisionData(groupId, retryUser.id) : { generation_state: 'superseded' }) };
+        const filtered = await hooks.applyFilters('db.messages.upsert:filter:input', { ...old, data: { ...dataRecord(old.data), ...archive } });
         const row = parseOrThrow(MessageSchema, { ...filtered, id: old.id, thread_id: old.thread_id,
-            data: { ...dataRecord(filtered.data), superseded_by: prepared.value.id, generation_state: 'superseded' },
+            data: { ...dataRecord(filtered.data), ...archive },
             updated_at: nowSec(), clock: nextClock(old.clock), hlc: generateHLC() });
         await hooks.doAction('db.messages.upsert:action:before', { entity: toMessageEntity(row), tableName: 'messages' });
         replacements.push({ expected, row });
@@ -634,6 +657,11 @@ async function appendMessageGroupToDb(
         'rw', getWriteTxTableNames(db, 'messages', { include: ['threads'] }), async () => {
             // Validate the complete selected revision before any writes. All old
             // rows and the admitted replacement share one outbox transaction.
+            if (replacements.length) {
+                const latest = await latestRetryUser(db, prepared.value.thread_id);
+                if (!latest || !replacements.some(({ expected }) => expected.id === latest.id))
+                    throw new Error('Only the latest turn can be retried.');
+            }
             for (const { expected } of replacements) {
                 const current = await db.messages.get(expected.id);
                 if (!current || current.deleted || current.thread_id !== prepared.value.thread_id

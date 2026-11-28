@@ -1,129 +1,24 @@
-/**
- * @module app/utils/chat/useAi-internal/retry.ts
- *
- * Purpose:
- * Implements message retry functionality for the AI chat system. Handles the
- * replacement and re-submission of user-assistant message pairs while preserving
- * message context (attachments, reasoning, file hashes).
- *
- * Responsibilities:
- * - Locate the user message associated with a retry target
- * - Supersede only the selected turn after the retry is durably accepted
- * - Synchronize in-memory message arrays with database state
- * - Re-send user message with optional model override
- * - Emit lifecycle hooks for plugin observation
- *
- * Non-responsibilities:
- * - Does not handle streaming logic (delegated to sendMessage)
- * - Does not validate user permissions or rate limits
- * - Does not manage thread lifecycle (created elsewhere)
- *
- * Architecture:
- * - Operates within the useAi composable internal suite
- * - Uses Dexie for local-first IndexedDB operations
- * - Relies on hooks system for extensibility
- *
- * Invariants:
- * - User message must exist and belong to current thread
- * - Later turns remain in context and in the conversation
- * - In-memory arrays are restored if the resend is rejected
- */
-
 import type { Ref } from 'vue';
 import type { ChatMessage, ContentPart, SendMessageParams, SendResult } from '~/utils/chat/types';
 import { hasDurableSendAcceptance } from '~/utils/chat/types';
-import { SUPERSEDED_BY_KEY, isSupersededMessage, storedMessagesToCanonicalTranscript, projectTranscriptForOpenRouter, projectTranscriptForUi } from '~/utils/chat/transcript';
+import { isSupersededMessage, storedMessagesToCanonicalTranscript, projectTranscriptForOpenRouter } from '~/utils/chat/transcript';
 import { resolveThreadProjection } from '~/utils/chat/compaction/history';
-import type { UiChatMessage } from '~/utils/chat/uiMessages';
 import { getDb, getWorkspaceGeneration } from '~/db/client';
-import { compareMessageOrder, messagesByThread } from '~/db/messages';
+import { compareMessageOrder, latestRetryUser, messagesByThread } from '~/db/messages';
 import { parseFileHashes } from '~/db/files-util';
 import { reportError, err } from '~/utils/errors';
 import type { StoredMessage } from './types';
 import { normalizeStreamingMessage } from '~/utils/chat/messages';
+import { answerRevisionOf, rowsForUserTurn } from '~/utils/chat/answer-revisions';
 
-/**
- * Minimal hook interface required by retry operations.
- *
- * Purpose:
- * Provides a constrained interface for emitting lifecycle hooks without
- * depending on the full hook engine. Enables easier testing and composition.
- *
- * Constraints:
- * - Only supports action emission (not filters)
- * - Payloads are typed as unknown for flexibility
- */
-type HooksLike = {
-    doAction: (name: string, payload?: unknown) => Promise<unknown>;
-};
-
-/**
- * Context object required for retry operations.
- *
- * Purpose:
- * Encapsulates all dependencies needed to retry a message, enabling
- * testability and separation of concerns from the composable state.
- *
- * Behavior:
- * - Provides reactive refs for loading state and thread identification
- * - References message arrays that must stay synchronized with Dexie
- * - Includes hook interface for lifecycle notifications
- * - Contains callback to suppress automatic tail assistant flushing
- *
- * Constraints:
- * - threadIdRef must be defined before calling retryMessageImpl
- * - sendMessage must handle the actual network request
- * - suppressNextTailFlush prevents UI flicker during retry
- */
 export type RetryMessageContext = {
     loading: Ref<boolean>;
     threadIdRef: Ref<string | undefined>;
-    tailAssistant: Ref<UiChatMessage | null>;
-    rawMessages: Ref<ChatMessage[]>;
-    messages: Ref<UiChatMessage[]>;
-    hooks: HooksLike;
+    hooks: { doAction: (name: string, payload?: unknown) => Promise<unknown> };
     sendMessage: (text: string, params: SendMessageParams) => Promise<SendResult>;
+    replaceCanonicalHistory: (history: ChatMessage[]) => void;
     defaultModelId: string;
-    suppressNextTailFlush: (assistantId: string) => void;
-    /** Navigation ownership captured before asynchronous retry preparation. */
     ownsView?: () => boolean;
-};
-
-/**
- * Internal helper. Stable turn identity for pairing without numeric indexes.
- * New rows carry `data.turn_id`; legacy rows fall back to the message id.
- */
-const turnIdOf = (message: StoredMessage): string => {
-    const data =
-        message.data && typeof message.data === 'object'
-            ? (message.data as Record<string, unknown>)
-            : null;
-    const turnId = data?.turn_id;
-    return typeof turnId === 'string' && turnId ? turnId : message.id;
-};
-
-/**
- * Internal helper. Owning user turn for assistant/tool rows, when recorded.
- */
-const parentTurnIdOf = (message: StoredMessage): string | undefined => {
-    const data =
-        message.data && typeof message.data === 'object'
-            ? (message.data as Record<string, unknown>)
-            : null;
-    const parent = data?.parent_turn_id;
-    return typeof parent === 'string' && parent ? parent : undefined;
-};
-
-/**
- * Internal helper. Assistant whose tool call a tool-result row answers.
- */
-const parentAssistantIdOf = (message: StoredMessage): string | undefined => {
-    const data =
-        message.data && typeof message.data === 'object'
-            ? (message.data as Record<string, unknown>)
-            : null;
-    const parent = data?.parent_assistant_id;
-    return typeof parent === 'string' && parent ? parent : undefined;
 };
 
 /**
@@ -140,86 +35,12 @@ const extractUserText = (originalText: unknown): string => {
     return '';
 };
 
-/**
- * `ai.chat.retry:action:*` (action)
- *
- * Purpose:
- * Retries a message by moving its user-assistant turn to the bottom. The old
- * turn is superseded only after the replacement user row is durable.
- *
- * Behavior:
- * 1. Validates loading state and thread context
- * 2. Locates target message and associated user message
- * 3. Synchronizes in-memory state with IndexedDB if needed
- * 4. Emits `ai.chat.retry:action:before` hook
- * 5. Optimistically hides only the selected turn
- * 6. Re-sends the user message with all other turns as context
- * 7. Supersedes the old turn after the new user row is durable
- * 8. Emits `ai.chat.retry:action:after` hook with new message IDs
- *
- * Hook Payloads:
- *
- * `ai.chat.retry:action:before`:
- * ```ts
- * {
- *   threadId: string;
- *   originalUserId: string;
- *   originalAssistantId?: string;
- *   triggeredBy: 'user' | 'assistant';
- * }
- * ```
- *
- * `ai.chat.retry:action:after`:
- * ```ts
- * {
- *   threadId: string;
- *   originalUserId: string;
- *   originalAssistantId?: string;
- *   newUserId?: string;
- *   newAssistantId?: string;
- * }
- * ```
- *
- * Constraints:
- * - Requires active thread context (threadIdRef must be defined)
- * - Skips if loading state is true (prevents concurrent retries)
- * - User message must belong to current thread
- * - Returns early silently if preconditions fail
- *
- * Errors:
- * - `ERR_INTERNAL`: Unexpected failure during retry operation
- *   Tags: `{ domain: 'chat', op: 'retryMessage' }`
- *
- * Non-Goals:
- * - Does not validate model override against available models
- * - Does not persist retry history for analytics
- * - Does not hard-delete rows; synced histories retain superseded records
- *
- * @example
- * ```ts
- * const ctx: RetryMessageContext = {
- *   loading: ref(false),
- *   threadIdRef: ref('thread-123'),
- *   tailAssistant: ref(null),
- *   rawMessages: ref([]),
- *   messages: ref([]),
- *   hooks: { doAction: async () => {} },
- *   sendMessage: async (text, params) => {  },
- *   defaultModelId: 'gpt-4',
- *   suppressNextTailFlush: () => {}
- * };
- *
- * await retryMessageImpl(ctx, 'msg-456', 'claude-3');
- * ```
- *
- * @see ai.chat.send:action:before for message sending lifecycle
- * @see docs/core-hook-map.md for hook conventions
- */
+/** Replaces the latest turn only after its revisions and replacement commit together. */
 export async function retryMessageImpl(
     ctx: RetryMessageContext,
     messageId: string,
     modelOverride?: string
-) : Promise<SendResult | undefined> {
+): Promise<SendResult | undefined> {
     if (ctx.loading.value || !ctx.threadIdRef.value) return undefined;
 
     try {
@@ -240,77 +61,25 @@ export async function retryMessageImpl(
             .filter((message) => !message.deleted && !isSupersededMessage(message))
             .sort(compareMessageOrder);
 
-        // Pair turns by persisted turn relationship first; fall back to
-        // canonical position. Numeric `index` comparisons are wrong when rows
-        // share an index — the real order is index, then order_key, then id,
-        // which `ordered` already reflects.
-        const positionById = new Map(ordered.map((message, position) => [message.id, position]));
-        const targetPos = positionById.get(target.id) ?? -1;
-        if (targetPos < 0) return undefined;
-
-        let userMsg = target.role === 'user' ? target : undefined;
-        if (!userMsg && target.role === 'assistant') {
-            const parentTurnId = parentTurnIdOf(target as StoredMessage);
-            userMsg =
-                (parentTurnId
-                    ? ordered.find(
-                          (message) =>
-                              message.role === 'user' &&
-                              turnIdOf(message as StoredMessage) === parentTurnId
-                      )
-                    : undefined) ??
-                [...ordered]
-                    .reverse()
-                    .find(
-                        (message) =>
-                            message.role === 'user' &&
-                            (positionById.get(message.id) ?? -1) < targetPos
-                    );
-        }
+        const userMsg = ordered.findLast(message => message.role === 'user');
         if (!userMsg || !ownsRetry()) return undefined;
-
-        const userPos = positionById.get(userMsg.id) ?? -1;
-        const userTurnId = turnIdOf(userMsg as StoredMessage);
-        const nextUserPos = ordered.find(
-            (message) =>
-                message.role === 'user' &&
-                (positionById.get(message.id) ?? -1) > userPos
-        )?.id;
-        const nextUserPosition =
-            nextUserPos !== undefined ? positionById.get(nextUserPos) : undefined;
-        const inTurn = (message: StoredMessage) => {
-            const pos = positionById.get(message.id) ?? -1;
-            return (
-                pos > userPos &&
-                (nextUserPosition === undefined || pos < nextUserPosition)
-            );
-        };
-        const turnRows = ordered.filter((message) => {
-            if (message.id === userMsg.id) return true;
-            if (message.role === 'user' || message.role === 'system') return false;
-            const parentTurnId = parentTurnIdOf(message as StoredMessage);
-            return parentTurnId ? parentTurnId === userTurnId : inTurn(message as StoredMessage);
-        });
-        // Tool results record their assistant (not the user turn) as parent.
-        // Superseding the call without its results leaves an orphaned tool
-        // message that providers reject on every later request.
-        const turnAssistantIds = new Set(
-            turnRows.filter((message) => message.role === 'assistant').map((message) => message.id)
-        );
-        const turnRowIds = new Set(turnRows.map((message) => message.id));
-        const selectedTurn = ordered.filter((message) => turnRowIds.has(message.id) || (
-            message.role === 'tool'
-            && turnAssistantIds.has(parentAssistantIdOf(message as StoredMessage) ?? '')
-        ));
+        const selectedTurn = rowsForUserTurn(ordered, userMsg);
+        if (target.id !== userMsg.id && (target.role !== 'assistant'
+            || !selectedTurn.some(row => row.id === target.id))) return undefined;
+        if (selectedTurn.some(message => message.pending)) return undefined;
         const selectedIds = new Set(selectedTurn.map((message) => message.id));
         const assistant =
             target.role === 'assistant'
                 ? target
-                : selectedTurn.find((message) => message.role === 'assistant');
+                : selectedTurn.findLast((message) => message.role === 'assistant');
 
         // Read saved execution evidence before hiding/superseding the turn.
         // A fresh request ledger cannot authorize repeating an uncertain write.
-        const uncertain = selectedTurn.some(message => message.role === 'assistant'
+        const group = answerRevisionOf(userMsg)?.groupId;
+        const evidence = group
+            ? [...selectedTurn, ...dbMessages.filter(row => !row.deleted && answerRevisionOf(row)?.groupId === group)]
+            : selectedTurn;
+        const uncertain = evidence.some(message => message.role === 'assistant'
             && normalizeStreamingMessage({ data: message.data }).toolCalls.some(call =>
                 call.outcome === 'unresolved' || call.executionReceipt?.state === 'running'
                 || call.executionReceipt?.state === 'unresolved'));
@@ -324,11 +93,7 @@ export async function retryMessageImpl(
             triggeredBy: target.role as 'user' | 'assistant',
         });
 
-        // Hooks may await while navigation or another send takes ownership.
-        // Never bind the old turn's prompt/history into that newer view.
-        if (!ownsRetry()) return undefined;
-
-        // Store original text and hashes before hiding the selected turn.
+        // Read the saved text and attachments for the replacement.
         // extractUserText handles both string content and ContentPart[] arrays,
         // so pass the raw content source rather than a collapsed string fallback.
         const userContent = (userMsg as StoredMessage).content;
@@ -345,52 +110,28 @@ export async function retryMessageImpl(
             hashes = parseFileHashes(userMsg.file_hashes);
         }
 
-        const projection = await resolveThreadProjection(threadId, db);
         if (!ownsRetry()) return undefined;
-        const originalCanonical = storedMessagesToCanonicalTranscript(projection.messages);
-        const originalHistory = projectTranscriptForOpenRouter(originalCanonical);
-        const originalUi = projectTranscriptForUi(originalCanonical);
-        const retainedRows = projection.messages.filter((message) => !selectedIds.has(message.id));
-        // Only the local selected turn is replaced; inherited summary/ancestor
-        // rows and unrelated local turns retain the canonical projection policy.
-        const retainedCanonical = storedMessagesToCanonicalTranscript(retainedRows);
-        const retryHistory = projectTranscriptForOpenRouter(retainedCanonical);
-        ctx.rawMessages.value = retryHistory;
-        ctx.messages.value = projectTranscriptForUi(retainedCanonical);
-        const previousTail = ctx.tailAssistant.value;
-        if (previousTail && selectedIds.has(previousTail.id)) {
-            ctx.tailAssistant.value = null;
-        }
+        const projection = await resolveThreadProjection(threadId, db);
+        // A peer can admit a newer turn while the retry hook or projection waits.
+        const latest = await latestRetryUser(db, threadId);
+        if (!ownsRetry() || latest?.id !== userMsg.id || latest.clock !== userMsg.clock || latest.hlc !== userMsg.hlc) return undefined;
 
-        const restoreOriginalTurn = () => {
-            if (!ownsRetry()) return;
-            ctx.rawMessages.value = originalHistory;
-            ctx.messages.value = originalUi;
-            if (previousTail && selectedIds.has(previousTail.id)) {
-                ctx.tailAssistant.value = previousTail;
-            }
-        };
+        // Hydrate the complete current view, including reference ancestors. Only
+        // durable replacement can remove any of the selected turn's rows.
+        ctx.replaceCanonicalHistory(projectTranscriptForOpenRouter(storedMessagesToCanonicalTranscript(projection.messages)));
+        const retainedRows = projection.messages.filter(message => !selectedIds.has(message.id));
+        const retryHistory = projectTranscriptForOpenRouter(storedMessagesToCanonicalTranscript(retainedRows));
 
-        const textToSend = extractUserText(originalTextRaw);
-
-        let result: SendResult;
-        try {
-            result = await ctx.sendMessage(textToSend, {
-                model: modelOverride || ctx.defaultModelId,
-                file_hashes: hashes,
-                files: [],
-                online: false,
-                historyOverride: retryHistory,
-                retryExcludedMessageIds: [...selectedIds],
-                retryReplacement: selectedTurn.map(row => ({ id: row.id, clock: row.clock, hlc: row.hlc })),
-            });
-        } catch (sendError) {
-            restoreOriginalTurn();
-            throw sendError;
-        }
-
+        const result = await ctx.sendMessage(extractUserText(originalTextRaw), {
+            model: modelOverride || ctx.defaultModelId,
+            file_hashes: hashes,
+            files: [],
+            online: false,
+            historyOverride: retryHistory,
+            retryExcludedMessageIds: [...selectedIds],
+            retryReplacement: selectedTurn.map(row => ({ id: row.id, clock: row.clock, hlc: row.hlc })),
+        });
         const supersededIds = hasDurableSendAcceptance(result) ? [...selectedIds] : [];
-        if (!hasDurableSendAcceptance(result)) restoreOriginalTurn();
 
         if ('userMessageId' in result && result.userMessageId) {
             try {

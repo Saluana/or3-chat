@@ -84,10 +84,10 @@ export function createNativeExecution(ports: {
                 throw Object.assign(new Error('A final request filter changed the reviewed lossy candidate. Inspect the omissions again.'),
                     { code: 'context_full' });
             }
-            const { retryReplacement: _replacement, onUserPersisted: _persisted, historyOverride: _history, lossyConfirmation: _confirmation, inspectLossyRequest: _inspect, ...savedInput } = recoveryInput;
+            const { retryReplacement: _replacement, retryRecoveryRequestId: _recovery, onUserPersisted: _persisted, historyOverride: _history, lossyConfirmation: _confirmation, inspectLossyRequest: _inspect, ...savedInput } = recoveryInput;
             // Durable before inference: rejection or crash cannot append another user turn.
             const checkpoint = await saveNativeRecoveryCheckpoint({ db: requestScope.originDb,
-                requestId, threadId: requestThreadId, userMessageId: userDbMsg.id, assistantMessageId: assistantDbMsg.id,
+                requestId, threadId: requestThreadId, user: userDbMsg, assistantMessageId: assistantDbMsg.id,
                 savedInput, messages: orMessages, tools: advertisedToolDefs, delegationDefaults,
                 projectContext: () => requestScope.projectContext, projectQuery,
                 masterPrompt: () => useAiSettings().settings.value.masterSystemPrompt, taskPrompt: ports.taskPrompt,

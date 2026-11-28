@@ -106,7 +106,7 @@ describe('message editor persistence ownership', () => {
         const saving = editor.saveEdit(); await hold.reached;
         await a.db.messages.update('message', { data: { content: 'A', plugin: 'new metadata' }, clock: 8 });
         hold.release(); expect(await saving).toBe('saved');
-        expect((await a.db.messages.get('message'))?.data).toEqual({ content: 'edited', plugin: 'new metadata' });
+        expect((await a.db.messages.get('message'))?.data).toEqual({ content: 'edited', edit_id: expect.any(String), plugin: 'new metadata' });
         expect((await a.db.messages.get('message'))?.clock).toBeGreaterThan(8);
     });
 

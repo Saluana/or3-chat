@@ -247,6 +247,8 @@ export async function forkThread({
             const messagesToCopy = ancestors.map((m, i) => {
                 const data: Record<string, unknown> | null = m.data && typeof m.data === 'object' && !Array.isArray(m.data) ? { ...m.data } : null;
                 if (data) {
+                    delete data.answer_revision_group;
+                    delete data.answer_revision_id;
                     for (const key of ['turn_id', 'parent_turn_id', 'parent_assistant_id'] as const) {
                         if (key in data) data[key] = remap(data[key]);
                     }

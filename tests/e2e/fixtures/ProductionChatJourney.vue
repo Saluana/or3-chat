@@ -3,6 +3,7 @@
         class="h-dvh min-h-0"
         :class="compactionJourney ? 'flex flex-col' : undefined"
         data-testid="production-chat-journey"
+        :data-retry-held="retryHeld || undefined"
     >
         <span class="sr-only" data-testid="chat-journey-thread-id">
             {{ threadId || 'new-thread' }}
@@ -112,6 +113,15 @@ async function qualifyHistory() {
         evidenceReceipt.value = JSON.stringify({ failure: error instanceof Error ? error.stack : String(error) });
     } finally { evidenceRunning.value = false; }
 }
+const turnActionsJourney = useRoute().query.turns === '1';
+const answerRevisionsJourney = useRoute().query.revisions === '1';
+const holdRetryJourney = useRoute().query.holdRetry === '1';
+const retryHeld = ref(false);
+const holdRetry = async () => {
+    retryHeld.value = true;
+    await new Promise<void>(resolve => window.addEventListener('or3:e2e:release-retry', () => resolve(), { once: true }));
+    retryHeld.value = false;
+};
 const contextJourney = useRoute().query.context === '1';
 onErrorCaptured((error) => {
     console.error('[production-chat-journey] captured component error', error instanceof Error ? error.stack ?? `${error.name}: ${error.message}` : String(error));
@@ -307,6 +317,13 @@ function installDeterministicFetch(): void {
 
         const body = await requestBody(input, init);
         const messages = Array.isArray(body.messages) ? body.messages : [];
+        if (turnActionsJourney) {
+            const key = 'or3:e2e:turn-requests';
+            const requests = JSON.parse(localStorage.getItem(key) ?? '[]') as unknown[];
+            localStorage.setItem(key, JSON.stringify([...requests, messages.map(message => ({
+                role: (message as { role: string }).role, text: messageText(message),
+            }))]));
+        }
         if (plainModelJourney) {
             const partTypes = messages.flatMap((message) => Array.isArray((message as { content?: unknown }).content)
                 ? ((message as { content: Array<{ type?: string }> }).content).map((part) => part?.type) : []);
@@ -515,6 +532,8 @@ function installDeterministicFetch(): void {
                         enqueue(sseChunk('Recovered '));
                         await delay(120);
                         enqueue(sseChunk('after retry.'));
+                    } else if (turnActionsJourney) {
+                        enqueue(sseChunk('Reply to ' + text + (answerRevisionsJourney ? ' — version ' + attempt : '')));
                     } else {
                         enqueue(sseChunk('Hello '));
                         await delay(projectJourney && text.includes('journey:project-pane') ? 4000 : 800);
@@ -555,6 +574,7 @@ onMounted(async () => {
     hooks.addFilter('ui.chat.message:filter:outgoing', pauseAdmission);
     hooks.addFilter('ai.chat.messages:filter:before_send', emptyInput);
     hooks.addAction('ai.chat.stream:action:error', recordNativeError);
+    if (holdRetryJourney) hooks.addAction('ai.chat.retry:action:before', holdRetry);
     installDeterministicFetch();
     // Set scripted routing before seed-time auxiliary compactions, too.
     localStorage.setItem('or3:server-route-available', JSON.stringify({ available: false, timestamp: Date.now() }));
@@ -794,6 +814,7 @@ onBeforeUnmount(() => {
     hooks.removeFilter('ui.chat.message:filter:outgoing', pauseAdmission);
     hooks.removeFilter('ai.chat.messages:filter:before_send', emptyInput);
     hooks.removeAction('ai.chat.stream:action:error', recordNativeError);
+    if (holdRetryJourney) hooks.removeAction('ai.chat.retry:action:before', holdRetry);
     restoreFetch?.();
 });
 </script>

@@ -30,6 +30,7 @@ interface ContentPartLike {
 }
 
 interface RawMessageLike {
+    answerVersions?: import('./answer-revisions').AnswerVersionNavigation;
     id?: string;
     thread_id?: string;
     stream_id?: string;
@@ -99,11 +100,15 @@ export type UiChatMessagePart =
  * UI-friendly message shape with flattened text and optional workflow data.
  */
 export interface UiChatMessage {
+    answerVersions?: import('./answer-revisions').AnswerVersionNavigation;
     data?: Record<string, unknown>;
     id: string;
     /** Stored owner of an inherited message; chat actions still use the pane. */
     sourceThreadId?: string;
     role: 'user' | 'assistant' | 'system' | 'tool';
+    turnId?: string;
+    parentTurnId?: string;
+    edited?: boolean;
     text: string; // flattened text + markdown image placeholders
     file_hashes?: string[];
     attachmentSelections?: AttachmentSelection[];
@@ -305,7 +310,11 @@ export function ensureUiMessage(raw: RawMessageLike): UiChatMessage {
         : undefined;
     return {
         id,
+        ...(raw.answerVersions ? { answerVersions: raw.answerVersions } : {}),
         ...(raw.thread_id ? { sourceThreadId: raw.thread_id } : {}),
+        ...(typeof raw.data?.turn_id === 'string' ? { turnId: raw.data.turn_id } : {}),
+        ...(typeof raw.data?.parent_turn_id === 'string' ? { parentTurnId: raw.data.parent_turn_id } : {}),
+        ...(typeof raw.data?.edit_id === 'string' ? { edited: true } : {}),
         role,
         text,
         file_hashes,

@@ -9,6 +9,7 @@ import type { ContentPart, ChatMessage, SendMessageParams, SendResult, ChatReque
 import { ensureUiMessage, type UiChatMessage } from '~/utils/chat/uiMessages';
 import { deriveMessageContent } from '~/utils/chat/messages';
 import { associateUiToolResultMessages } from '~/utils/chat/transcript';
+import { latestRetryUser } from '~/db/messages';
 import { discardStaleRecovery } from '~/utils/chat/native-recovery';
 import { chatToolPreferenceKey } from '~/utils/chat/tool-preferences';
 import { reportError, err } from '~/utils/errors';
@@ -738,9 +739,6 @@ export function useChat(
         log: logBgStream,
     });
 
-    let lastSuppressedAssistantId: string | null = null;
-
-
     /**
      * Purpose:
      * Sends a user message, performs validation, and streams an assistant response.
@@ -904,14 +902,7 @@ export function useChat(
         guestAccessEnabled, backgroundStreamingAllowed, ssrAuthEnabled: () => runtimeConfig.public.ssrAuthEnabled === true,
         startLogin: () => { void openRouterAuth.startLogin(); }, taskPrompt: () => activePromptContent.value,
         enforceClientLimits, recoverNativeTurn: (...args) => recoverNativeTurn(...args),
-        flushForSend: () => {
-            if (tailAssistant.value && lastSuppressedAssistantId && tailAssistant.value.id === lastSuppressedAssistantId) {
-                tailAssistant.value = null;
-            } else {
-                flushTailAssistant();
-            }
-            lastSuppressedAssistantId = null;
-        },
+        flushForSend: flushTailAssistant,
     });
     const nativeRecoveryCandidates = createNativeRecoveryCandidates();
     const runPreparedNative = createNativeExecution({
@@ -949,67 +940,44 @@ export function useChat(
 
     // END sendMessage
 
-    /**
-     * Purpose:
-     * Retries a prior turn by moving its user/assistant pair to the bottom.
-     *
-     * Behavior:
-     * - Rebuilds message context from local state
-     * - Reuses the current settings unless a model override is supplied
-     * - `afterEdit`: the user prompt was just edited, which changes the turn's
-     *   conversation fingerprint. A saved attempt for it can no longer be
-     *   recovered, so it is discarded and a fresh request is built from the
-     *   edited row instead.
-     *
-     * Constraints:
-     * - No-op if message or thread context is missing
-     */
-    async function retryMessage(messageId: string, modelOverride?: string, options: { afterEdit?: boolean } = {}) {
-        if (disposed) return { status: 'rejected' as const, reason: 'unavailable' as const };
+    /** Retry the latest turn, reusing a valid saved provider request when available. */
+    async function retryMessage(messageId: string, modelOverride?: string) {
+        if (disposed || loading.value || activeRequestId.value)
+            return { status: 'rejected' as const, reason: disposed ? 'unavailable' as const : 'busy' as const };
+        const threadId = threadIdRef.value;
+        if (!threadId) return;
         const retryRevision = navigationRevision;
-        const retryDb = getDb(); const retryGeneration = getWorkspaceGeneration();
-        const ownsRetry = () => !disposed && retryRevision === navigationRevision
-            && getDb() === retryDb && getWorkspaceGeneration() === retryGeneration;
-        if (threadIdRef.value) {
-            const db = retryDb; const threadId = threadIdRef.value;
-            const checkpoint = await db.chat_request_recoveries.get(threadId);
-            if (!ownsRetry() || threadIdRef.value !== threadId)
-                return { status: 'rejected' as const, reason: 'unavailable' as const };
-            if (options.afterEdit) {
-                if (checkpoint?.user_message_id === messageId) {
-                    await db.transaction('rw', db.chat_request_recoveries, async () => {
-                        const saved = await db.chat_request_recoveries.get(threadId);
-                        if (saved?.user_message_id === messageId) await db.chat_request_recoveries.delete(threadId);
-                    });
-                }
-            } else if (checkpoint && [checkpoint.user_message_id, checkpoint.assistant_message_id].includes(messageId)) {
+        const db = getDb();
+        const generation = getWorkspaceGeneration();
+        const ownsRetry = () => !disposed && retryRevision === navigationRevision && threadIdRef.value === threadId
+            && getDb() === db && getWorkspaceGeneration() === generation;
+        const checkpoint = await db.chat_request_recoveries.get(threadId);
+        const unavailable = { status: 'rejected', reason: 'unavailable' } as const;
+        if (!ownsRetry()) return unavailable;
+        if (checkpoint && [checkpoint.user_message_id, checkpoint.assistant_message_id].includes(messageId)) {
+            const latest = await latestRetryUser(db, threadId);
+            if (!ownsRetry() || latest?.id !== checkpoint.user_message_id) return unavailable;
+            const discarded = await discardStaleRecovery(db, checkpoint);
+            if (!ownsRetry()) return unavailable;
+            if (!discarded) {
                 // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- A durable checkpoint can be written by a newer client.
                 if (checkpoint.version !== 1)
                     return { status: 'rejected' as const, reason: 'unavailable' as const,
                         error: 'This saved attempt uses an unsupported recovery version. Update the app or edit the draft to prepare a new request.' };
-                const discarded = await discardStaleRecovery(db, checkpoint);
-                if (!ownsRetry())
-                    return { status: 'rejected' as const, reason: 'unavailable' as const };
-                if (!discarded) return sendMessage({ ...checkpoint.input, model: modelOverride || checkpoint.input.model });
+                return sendMessage({ ...checkpoint.input, model: modelOverride || checkpoint.input.model, retryRecoveryRequestId: checkpoint.request_id });
             }
         }
         const { retryMessageImpl } = await import('~/utils/chat/useAi-internal/retry');
-        if (!ownsRetry())
-            return { status: 'rejected' as const, reason: 'unavailable' as const };
-        return await retryMessageImpl(
+        if (!ownsRetry()) return unavailable;
+        return retryMessageImpl(
             {
-                ownsView: () => !disposed && navigationRevision === retryRevision,
+                ownsView: ownsRetry,
                 loading,
                 threadIdRef,
-                tailAssistant,
-                rawMessages,
-                messages,
                 hooks,
                 sendMessage,
+                replaceCanonicalHistory,
                 defaultModelId: DEFAULT_AI_MODEL,
-                suppressNextTailFlush: (assistantId: string) => {
-                    lastSuppressedAssistantId = assistantId;
-                },
             },
             messageId,
             modelOverride

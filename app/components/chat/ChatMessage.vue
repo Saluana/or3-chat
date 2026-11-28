@@ -217,6 +217,7 @@
                     Response stopped. You can retry or continue the
                     conversation.
                 </p>
+                <span v-if="props.message.edited" class="block text-xs opacity-60">Edited</span>
                 <!-- Retro loader extracted to component -->
                 <LoadingGenerating
                     v-if="
@@ -404,6 +405,7 @@
                 :class="[
                     'cm-actions flex z-10',
                     `cm-actions-${roleVariant}`,
+                    props.message.answerVersions && 'cm-actions-versioned',
                     // A streaming reply keeps the row's space but not its buttons, so
                     // nothing flickers or becomes focusable until the reply is done.
                     props.message.pending && 'invisible',
@@ -424,6 +426,7 @@
                         ></UButton>
                     </UTooltip>
                     <UTooltip
+                        v-if="props.canRetry"
                         :delay-duration="500"
                         text="Retry"
                         :popper="{ strategy: 'fixed' }"
@@ -582,6 +585,27 @@
                         </div>
                     </template>
                 </UTooltip>
+                <div v-if="props.message.answerVersions" class="cm-answer-versions" role="group" aria-label="Answer versions">
+                    <UButton
+                        v-bind="pluginActionButtonProps"
+                        class="cm-version-arrow"
+                        icon="i-lucide-chevron-left"
+                        aria-label="Previous answer version"
+                        :disabled="props.revisionDisabled || !props.message.answerVersions.previousId"
+                        @click="selectAnswerVersion(props.message.answerVersions.previousId)"
+                    />
+                    <span class="cm-version-count" aria-live="polite">
+                        {{ props.message.answerVersions.position }} / {{ props.message.answerVersions.total }}
+                    </span>
+                    <UButton
+                        v-bind="pluginActionButtonProps"
+                        class="cm-version-arrow"
+                        icon="i-lucide-chevron-right"
+                        aria-label="Next answer version"
+                        :disabled="props.revisionDisabled || !props.message.answerVersions.nextId"
+                        @click="selectAnswerVersion(props.message.answerVersions.nextId)"
+                    />
+                </div>
             </div>
         </template>
         <ProjectMessageContext ref="projectMessageContext" :thread-id="props.threadId" :message-id="props.message.id" :text="props.message.text" />
@@ -646,7 +670,9 @@ const props = withDefaults(
         message: MessageWithUiState;
         threadId?: string;
         interactive?: boolean;
+        canRetry?: boolean;
         retryDisabled?: boolean;
+        revisionDisabled?: boolean;
         compactionAction?: { start: (anchorMessageId?: string) => Promise<void>; blockedReason?: string };
         historyRetrievalAvailable?: boolean;
     }>(),
@@ -668,6 +694,7 @@ const workflowFallbackError = computed(() =>
 );
 const emit = defineEmits<{
     (e: 'retry', id: string): void;
+    (e: 'select-answer-version', currentId: string, targetId: string): void;
     (e: 'continue', id: string): void;
     (e: 'branch', id: string, source?: { originThreadId: string; anchorMessageId: string; generation: number }): void;
     (e: 'edited', payload: { id: string; content: string }): void;
@@ -1037,6 +1064,7 @@ async function wrappedCancelEdit() {
     if (button instanceof HTMLButtonElement) button.focus();
 }
 async function saveEdit() {
+    const id = props.message.id;
     let outcome: Awaited<ReturnType<typeof internalSaveEdit>>;
     try {
         outcome = await internalSaveEdit();
@@ -1050,8 +1078,7 @@ async function saveEdit() {
         });
         return;
     }
-    const id = props.message.id;
-    if (!id || outcome === 'ignored') return;
+    if (!id || props.message.id !== id || outcome === 'ignored') return;
     // Only a persisted change counts as an edit; empty and unchanged drafts just leave edit mode.
     if (outcome === 'saved') emit('edited', { id, content: draft.value });
     if (outcome === 'cancelled') emit('cancel-edit', id);
@@ -1205,8 +1232,13 @@ function copyMessage() {
         });
 }
 
+function selectAnswerVersion(targetId: string | undefined) {
+    const currentId = props.message.answerVersions?.versionId;
+    if (!props.revisionDisabled && currentId && targetId) emit('select-answer-version', currentId, targetId);
+}
+
 function onRetry() {
-    if (props.retryDisabled) return;
+    if (!props.canRetry || props.retryDisabled) return;
     const id = props.message.id;
     if (!id) return;
     emit('retry', id);
@@ -1235,7 +1267,6 @@ async function onBranch() {
     if (!messageId) { branching.value = false; return; }
     try {
         // For assistant messages we now allow direct anchoring (captures assistant content in branch).
-        // If "retry" semantics desired, a separate Retry action still uses retryBranch.
         const res = await forkThread({
             sourceThreadId: originThreadId,
             anchorMessageId: messageId,
@@ -1417,6 +1448,36 @@ const streamMdClasses = [
     flex-wrap: nowrap;
 }
 
+.cm-actions-versioned {
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.375rem 0.5rem;
+}
+
+.cm-answer-versions {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 0.125rem;
+    margin-inline-start: auto;
+    color: var(--md-on-surface-variant);
+}
+
+.cm-version-count {
+    min-inline-size: 3.5ch;
+    text-align: center;
+    white-space: nowrap;
+    font-size: 0.8125rem;
+    line-height: 1.25rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.cm-version-arrow {
+    inline-size: 2rem;
+    block-size: 2rem;
+    justify-content: center;
+}
+
 /* Per-reply usage is hidden unless the active theme opts in. */
 .cm-usage {
     display: none;
@@ -1446,19 +1507,24 @@ const streamMdClasses = [
     /* Match the layer of theme size utilities; the 44px floor is provided by
        the hit region rather than the painted strip. */
     @layer utilities {
-        .cm-action-group :deep(button) {
+        .cm-action-group :deep(button),
+        .cm-version-arrow {
             position: relative;
-            width: 44px;
-            min-width: 44px;
             height: 32px !important;
             min-height: 32px !important;
             padding: 0 !important;
             flex-shrink: 0;
             margin-inline: 0 !important;
         }
+
+        .cm-action-group :deep(button) {
+            width: 44px;
+            min-width: 44px;
+        }
     }
 
-    .cm-action-group :deep(button::before) {
+    .cm-action-group :deep(button::before),
+    .cm-version-arrow::before {
         content: '';
         position: absolute;
         top: 50%;

@@ -16,6 +16,7 @@ export type { TextPart, ImagePart, FilePart, ContentPart, ToolCall } from '~~/sh
  * Canonical chat message shape used by UI and persistence layers.
  */
 export interface ChatMessage extends AiMessage {
+    answerVersions?: import('./answer-revisions').AnswerVersionNavigation;
     id?: string;
     stream_id?: string;
     file_hashes?: string | null;
@@ -60,6 +61,8 @@ export interface SendMessageParams {
     retryExcludedMessageIds?: readonly string[];
     /** Revisions atomically superseded with the admitted replacement user row. */
     retryReplacement?: readonly import('~/db/messages').MessageRevision[];
+    /** An explicit Retry may replay only this saved request. */
+    retryRecoveryRequestId?: string;
     /** Runs after the new user row is durable, before response generation. */
     onUserPersisted?: (userMessageId: string) => void | Promise<void>;
 }

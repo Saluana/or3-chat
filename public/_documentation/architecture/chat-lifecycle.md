@@ -47,7 +47,7 @@ The native composer clears submitted text and attachments once the matching requ
 
 When a pane plugin sends text through the native composer, the request uses the supplied text and the pane’s chat settings. The composer keeps its unsent text, mentions, large pasted blocks and attachments for the user’s next send.
 
-Create `useChat()` during component setup and dispose it on unmount. A disposed controller rejects new sends and retries and ignores continuation requests. Thread switching waits for foreground settlement but applies only if that navigation still owns the controller, account and workspace. Saved retry recovery checks the same origin again after reading its assistant row. Reuse the existing `ChatContainer.vue` send and acceptance handling when extending product actions: it watches the matching request's `persisted` or `streaming` state, then the terminal result, and fences draft clearing against text edits and navigation. `hasDurableSendAcceptance()` identifies the same saved user row.
+Create `useChat()` during component setup and dispose it on unmount. A disposed controller rejects new sends and retries and ignores continuation requests. Thread switching waits for foreground settlement but applies only if that navigation still owns the controller, account and workspace. Saved retry recovery checks the same origin again after reading the saved attempt. Reuse the existing `ChatContainer.vue` send and acceptance handling when extending product actions: it watches the matching request's `persisted` or `streaming` state, then the terminal result, and fences draft clearing against text edits and navigation. `hasDurableSendAcceptance()` identifies the same saved user row.
 
 History synchronization and background-job recovery use browser-local storage.
 They must remain client-only even when a native chat route renders its shell on
@@ -74,6 +74,11 @@ ordering. The controller reuses an existing presentation row only when its full
 own-field set and shallow values are unchanged. This keeps unchanged rows idle
 when a stream finishes. New metadata references, edits, and removed fields still
 replace the presentation row; nested reactive metadata keeps its existing behavior.
+
+Edit and Save correct a user prompt or assistant reply in place. Later messages
+keep their positions, and Save makes zero generation requests. The next send uses
+the corrected history. A durable marker records actual changes and drives the
+Edited label. Cancel and unchanged saves leave the row as it was.
 
 Message edits capture the originating database, workspace generation and account
 access when editing begins. Saving patches content into the latest live message
@@ -102,10 +107,30 @@ runs on cancellation. An older activation cannot clear a newer activation's inte
 
 ### Retry and continuation
 
-Retry captures the selected turn's revisions. Admitting its replacement user row
-supersedes every selected row in the same Dexie/outbox transaction. A changed
-revision or failed write rejects the replacement without partially hiding the old
-turn. Plugin preparation and completion actions run outside that transaction.
+Retry appears once for the latest user turn, on its final assistant reply or on
+the prompt if it has no reply. Turn relationships and stored order determine
+which rows belong to it. Use Branch to explore a different answer from an earlier
+message.
+
+Retry rechecks the latest durable prompt and captures the selected turn's row
+revisions. The same Dexie/outbox transaction saves the new answer attempt and
+archives the previous one with its tool results. A newer turn, changed revision,
+or failed write blocks Retry before generation starts. Retry keeps the prompt's
+attachments and refuses to repeat a tool operation with an uncertain outcome
+across the saved versions. Plugin preparation and completion actions run outside
+the transaction.
+
+Use the previous and next answer arrows to select a saved version. Switching
+saves the selection without generating a response. The chat restores the selected
+version after reload and sends only that version as conversation context. Retrying
+from an older version adds a new version. The arrows remain available after
+subsequent turns, and copies made with Branch carry the selected answer. Revision
+navigation applies to answers saved by the versioned Retry flow.
+
+A saved provider request can recover the same turn when its input and history
+still match. Editing that request's prompt changes its edit marker and makes the
+saved payload ineligible for replay. An explicit Retry then builds a fresh request
+from the corrected prompt.
 
 Continuation claims the assistant's current revision and live parent in one write
 transaction before provider dispatch. Another pane preparing that same revision
