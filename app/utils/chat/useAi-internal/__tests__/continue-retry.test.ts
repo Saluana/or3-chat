@@ -614,7 +614,8 @@ describe('continue/retry regressions', () => {
         }, 'a1');
 
         const history = vi.mocked(buildOpenRouterMessagesForSend).mock.calls[0]![0].effectiveMessages;
-        expect(history.filter(row => row.role === 'assistant').map(row => row.id)).toEqual(['a1']);
+        expect(history.filter(row => row.role === 'assistant').map(row => ({ id: row.id, content: row.content })))
+            .toEqual([{ id: 'a1', content: '' }]);
         expect(history.filter(row => row.role === 'user').map(row => row.id)).toEqual(['u1', expect.stringMatching(/^continue-/)]);
         const { encodeOpenAiRequest } = await import('~~/shared/openai/adapter');
         const { encodeOpenAiResponseRequest } = await import('~~/shared/openai/responses');
