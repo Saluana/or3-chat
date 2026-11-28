@@ -1,8 +1,7 @@
 import { compareMessageOrder } from './messages';
 import { getWriteTxTableNames, nextClock, nowSec } from './util';
 import { generateHLC } from '~/core/sync/hlc';
-import { answerRevisionData, answerRevisionOf, rowsForUserTurn } from '~/utils/chat/answer-revisions';
-import { isSupersededMessage } from '~/utils/chat/transcript';
+import { answerRevisionData, answerRevisionMembership, answerRevisionOf, nextAnswerSelection, rowsForUserTurn, selectedAnswerVersionRows } from '~/utils/chat/answer-revisions';
 import type { WorkspaceOperationScope } from '~/utils/chat/workspace-access';
 
 /** Switch positions atomically with their tool results and the current prompt correction. */
@@ -15,28 +14,32 @@ export async function selectAnswerVersion(
         const thread = await db.threads.get(threadId);
         if (!thread || thread.deleted || currentId === targetId) return false;
         const rows = (await db.messages.where('thread_id').equals(threadId).toArray()).filter(row => !row.deleted).sort(compareMessageOrder);
-        const visible = rows.filter(row => !isSupersededMessage(row));
+        const visible = selectedAnswerVersionRows(rows);
         const current = visible.find(row => row.id === currentId && row.role === 'user');
-        const target = rows.find(row => row.id === targetId && row.role === 'user' && isSupersededMessage(row));
+        const target = rows.find(row => row.id === targetId && row.role === 'user');
         const revision = answerRevisionOf(current);
         const targetRevision = answerRevisionOf(target);
         if (!current || !target || !revision || !targetRevision || targetRevision.groupId !== revision.groupId
             || visible.some(row => row.pending)) return false;
 
-        const archived = rows.filter(row => {
-            const membership = answerRevisionOf(row);
-            return membership?.groupId === revision.groupId && membership.versionId === target.id;
+        const membership = answerRevisionMembership(rows);
+        const targetRows = rows.filter(row => {
+            const revisionOfRow = membership.get(row.id);
+            return revisionOfRow?.groupId === revision.groupId && revisionOfRow.versionId === target.id;
         });
+        const selection = nextAnswerSelection(rows, revision.groupId, target.id);
         const currentData = current.data as Record<string, unknown> | null;
         const updatedAt = nowSec();
         const stamp = (row: typeof current) => ({ ...row, clock: nextClock(row.clock), hlc: generateHLC(), updated_at: updatedAt });
         scope.assertCurrent('write');
         await db.messages.bulkPut([
             ...rowsForUserTurn(visible, current).map(row => ({ ...stamp(row),
-                data: { ...row.data as object, ...answerRevisionData(revision.groupId, current.id), superseded_by: target.id } })),
-            ...archived.map(row => {
+                data: { ...row.data as object, ...answerRevisionData(revision.groupId, current.id), superseded_by: target.id,
+                    ...(row.id === current.id ? selection : {}) } })),
+            ...targetRows.map(row => {
                 const { superseded_by: _archived, ...data } = row.data as Record<string, unknown>;
                 if (row.id === target.id) {
+                    Object.assign(data, selection);
                     data.content = currentData?.content;
                     if (currentData?.edit_id) data.edit_id = currentData.edit_id;
                     else delete data.edit_id;

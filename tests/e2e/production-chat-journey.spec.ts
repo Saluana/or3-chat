@@ -2454,18 +2454,27 @@ test.describe('production chat journey', () => {
 
     test('editing a failed prompt replaces only its obsolete saved request on explicit Retry', async ({ page }, info) => {
         test.setTimeout(120_000);
-        await openChat(page, '?turns=1&context=1');
+        await openChat(page, '?turns=1&context=1&holdEdit=1');
         const initial = 'journey:context-reject before correction';
         const corrected = 'Corrected failed prompt';
         await send(page, initial);
         const failed = page.getByRole('alert', { name: 'Response failed', exact: true });
         await expect(failed).toBeVisible();
         await editTurn(page, initial, corrected);
-        await expect(turnRow(page, corrected)).toBeVisible();
+        await expect(page.getByTestId('production-chat-journey')).toHaveAttribute('data-edit-held', 'true');
+        const dialogs: string[] = [];
+        page.on('dialog', async dialog => { dialogs.push(dialog.type()); await dialog.dismiss(); });
+        await page.evaluate(() => setTimeout(() => location.reload(), 0));
+        await expect.poll(() => dialogs).toEqual(['beforeunload']);
+        await expect(page.locator('.cm-editor-actions').locator('..').locator('[contenteditable="true"]')).toHaveText(corrected);
+        await page.evaluate(() => window.dispatchEvent(new Event('or3:e2e:release-edit')));
+        // The editor itself also displays the corrected text before the write commits.
+        await expect(turnRow(page, corrected).getByText('Edited', { exact: true })).toBeVisible();
         await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeVisible();
         expect(await turnRequests(page)).toHaveLength(1);
 
         await page.reload();
+        await expect(turnRow(page, corrected).getByText('Edited', { exact: true })).toBeVisible();
         const retry = page.getByRole('button', { name: 'Retry message', exact: true });
         await expect(retry).toHaveCount(1);
         await retry.click();
@@ -2475,6 +2484,7 @@ test.describe('production chat journey', () => {
         expect(requests[1]?.filter(message => message.role === 'user').map(message => message.text)).toEqual([corrected]);
         await expect(turnRow(page, initial)).toHaveCount(0);
         await expect(failed).toHaveCount(0);
+        expect(dialogs).toEqual(['beforeunload']);
         await info.attach('corrected-retry-request', { contentType: 'application/json', body: JSON.stringify(requests[1]) });
     });
 

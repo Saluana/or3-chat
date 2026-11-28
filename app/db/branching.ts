@@ -20,7 +20,8 @@ import { newId, nowSec, nextClock, getWriteTxTableNames } from './util';
 import type { Thread, Message } from './schema';
 import { useHooks } from '../core/hooks/useHooks';
 import { resolveRootThreadId, resolveThreadProjection } from '../utils/chat/compaction/history';
-import { isSupersededMessage } from '../utils/chat/transcript';
+import { selectedAnswerVersionRows } from '../utils/chat/answer-revisions';
+import { compareMessageOrder } from './messages';
 import type {
     BranchMode,
     BranchForkOptions,
@@ -188,7 +189,7 @@ export async function forkThread({
     const rootThreadId = await resolveRootThreadId(src.id, db);
 
     const anchor = await db.messages.get(anchorMessageId);
-    if (!anchor || anchor.deleted || isSupersededMessage(anchor) || anchor.thread_id !== sourceThreadId)
+    if (!anchor || anchor.deleted || anchor.thread_id !== sourceThreadId)
         throw new Error('Invalid anchor message');
     if (anchor.pending) throw new Error('Wait for this response to finish before branching.');
     // Minimal model: allow either user OR assistant anchor. (User anchors enable alt assistant responses; assistant anchors capture existing reply.)
@@ -235,6 +236,9 @@ export async function forkThread({
         if (await db.threads.get(fork.id)) throw new Error('The fork identity already exists.');
         if (JSON.stringify(await db.messages.get(anchor.id)) !== JSON.stringify(anchor))
             throw new Error('The anchor changed while preparing its fork. Try again.');
+        const sourceRows = (await db.messages.where('thread_id').equals(sourceThreadId).toArray()).sort(compareMessageOrder);
+        if (!selectedAnswerVersionRows(sourceRows).some(row => row.id === anchor.id))
+            throw new Error('Invalid anchor message');
 
         await db.threads.put(fork);
         membership = scope ? await moveChatProjectRows(scope, fork.id, projectId) : { projects: [], threads: [], placements: 0 };
@@ -249,6 +253,7 @@ export async function forkThread({
                 if (data) {
                     delete data.answer_revision_group;
                     delete data.answer_revision_id;
+                    delete data.answer_revision_selection;
                     for (const key of ['turn_id', 'parent_turn_id', 'parent_assistant_id'] as const) {
                         if (key in data) data[key] = remap(data[key]);
                     }

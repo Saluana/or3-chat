@@ -2,7 +2,6 @@ import type { Or3DB } from '~/db/client';
 import type { Table } from 'dexie';
 import type { Message, Thread } from '~/db/schema';
 import { yieldToMain } from '~/core/search/orama';
-import { isSupersededMessage } from '~/utils/chat/transcript';
 import { normalizeMessageContent } from '../normalize';
 import { projectWorkspaceConversation } from '~/utils/chat/workspace-conversation';
 import {
@@ -51,7 +50,7 @@ function searchMessageSnapshot(message: Message): Message {
         updated_at,
         clock,
     } = message;
-    const superseded = isSupersededMessage(message);
+    const data = message.data as Record<string, unknown> | undefined;
     return {
         id,
         thread_id,
@@ -63,16 +62,12 @@ function searchMessageSnapshot(message: Message): Message {
         clock,
         deleted: false,
         data: {
-            content:
-                !superseded && (role === 'user' || role === 'assistant')
-                    ? normalizeMessageContent(message)
-                    : '',
-            ...(superseded
-                ? {
-                      superseded_by: (message.data as Record<string, unknown>)
-                          .superseded_by,
-                  }
-                : {}),
+            content: role === 'user' || role === 'assistant' ? normalizeMessageContent(message) : '',
+            superseded_by: data?.superseded_by,
+            answer_revision_group: data?.answer_revision_group,
+            answer_revision_id: data?.answer_revision_id,
+            answer_revision_selection: data?.answer_revision_selection,
+            parent_turn_id: data?.parent_turn_id,
         },
     };
 }

@@ -122,7 +122,11 @@ the transaction.
 
 Use the previous and next answer arrows to select a saved version. Switching
 saves the selection without generating a response. The chat restores the selected
-version after reload and sends only that version as conversation context. Retrying
+version after reload and sends only that version as conversation context.
+Concurrent offline selections converge on a single answer after sync. Other
+answers stay available through the arrows, and existing branches retain their
+original anchor. When an edit is still saving, the browser can ask for
+confirmation before reloading or leaving the page. Retrying
 from an older version adds a new version. The arrows remain available after
 subsequent turns, and copies made with Branch carry the selected answer. Revision
 navigation applies to answers saved by the versioned Retry flow.

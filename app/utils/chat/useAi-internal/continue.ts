@@ -1,6 +1,7 @@
 import { addUsageTotals, readMeasuredRequestUsage } from '~~/shared/chat/request-usage';
 import { readRequestUsage, type RequestUsage } from '~~/shared/chat/compaction';
 import { resolveThreadProjection } from '~/utils/chat/compaction/history';
+import { answerRevisionOf, selectedAnswerVersionRows } from '~/utils/chat/answer-revisions';
 import { ChatContextAdmissionError, contextAdmissionFailureReason, type ContextRequestPolicy } from '~~/shared/chat/context-budget';
 import { BackgroundTrackerConflict } from './background-tracker-conflict';
 import { resolveOpenRouterLegacySelection } from '~~/shared/openrouter/selection';
@@ -37,7 +38,6 @@ import { acceptsImageInput } from '~/utils/modelCatalog';
  */
 
 import type { Ref } from 'vue';
-import type { Message } from '~/db';
 import { compareMessageOrder, patchMessageInDb } from '~/db/messages';
 import { projectTranscriptForOpenRouter, storedMessagesToCanonicalTranscript } from '~/utils/chat/transcript';
 import type { ChatMessage, ContentPart } from '~/utils/chat/types';
@@ -287,16 +287,17 @@ export async function continueMessageImpl(
         const DexieMod = (await import('dexie')).default;
         const admissionThread = await originDb.threads.get(originThreadId);
         if (!ownsThread()) return;
-        const all = admissionThread?.branch_mode === 'compacted' || admissionThread?.branch_mode === 'reference'
-            ? (await resolveThreadProjection(originThreadId, originDb, target.id)).messages
-            : await originDb.messages
-                .where('[thread_id+index]')
-                .between([originThreadId, DexieMod.minKey], [originThreadId, target.index])
-                .filter((m: Message) => !m.deleted)
-                .toArray();
-        // Canonical branch projection already orders each lineage segment. Sorting
-        // the flattened result by local index would interleave child and ancestors.
-        if (admissionThread?.branch_mode !== 'compacted' && admissionThread?.branch_mode !== 'reference') all.sort(compareMessageOrder);
+        const readSelectedLocalRows = async () => selectedAnswerVersionRows((await originDb.messages
+            .where('[thread_id+index]')
+            .between([originThreadId, DexieMod.minKey], [originThreadId, DexieMod.maxKey])
+            .toArray()).sort(compareMessageOrder));
+        const selected = admissionThread?.branch_mode === 'compacted' || admissionThread?.branch_mode === 'reference'
+            ? (await resolveThreadProjection(originThreadId, originDb)).messages
+            : await readSelectedLocalRows();
+        const anchor = selected.findIndex(row => row.id === target.id);
+        if (anchor < 0) return;
+        const all = selected.filter((row, index) => index <= anchor
+            || (row.role === 'tool' && (row.data as Record<string, unknown> | undefined)?.parent_assistant_id === target.id));
         if (!ownsThread()) return;
 
         // Project history exactly as send does: wire-format tool calls, each
@@ -451,6 +452,8 @@ export async function continueMessageImpl(
             error: null,
             data: {
                 error: null,
+                // A synced selection can choose an answer whose raw archive flag lost its own row merge.
+                ...(typeof target.data?.superseded_by === 'string' ? { superseded_by: null } : {}),
                 generation_state: 'streaming',
                 generation_id: newStreamId,
                 request_id: backgroundAdmissionId ?? newStreamId,
@@ -465,14 +468,15 @@ export async function continueMessageImpl(
         }, null, latest => Boolean(latest && !latest.deleted && !latest.pending
             && latest.thread_id === originThreadId && latest.role === 'assistant'
             && latest.clock === target.clock && latest.hlc === target.hlc
-            && (latest.data as Record<string, unknown> | null)?.generation_state !== 'superseded'
-            && typeof (latest.data as Record<string, unknown> | null)?.superseded_by !== 'string'), undefined, {
+            && (latest.data as Record<string, unknown> | null)?.generation_state !== 'superseded'), undefined, {
                 tables: ['threads'],
                 async assertCurrent() {
                     imageOwner.assertCurrent();
                     if (!ownsThread()) throw new ContinuationOwnershipLost();
                     const parent = await originDb.threads.get(originThreadId);
                     if (!parent || parent.deleted) throw new ContinuationOwnershipLost();
+                    if (answerRevisionOf(target) && !(await readSelectedLocalRows()).some(row => row.id === target.id))
+                        throw new ContinuationOwnershipLost();
                 },
             });
         if (!claimed) throw new ContinuationOwnershipLost();

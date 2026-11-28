@@ -38,8 +38,7 @@ import {
 } from './schema';
 import type { MessageEntity } from '../core/hooks/hook-types';
 import { serializeFileHashes } from './files-util';
-import { isSupersededMessage } from '~/utils/chat/transcript';
-import { answerRevisionData, answerRevisionOf } from '~/utils/chat/answer-revisions';
+import { answerRevisionData, answerRevisionOf, nextAnswerSelection, selectedAnswerVersionRows } from '~/utils/chat/answer-revisions';
 
 export function compareMessageOrder(
     a: Pick<Message, 'order_key' | 'id'> & { index?: number },
@@ -54,8 +53,7 @@ export function compareMessageOrder(
 // Read durable chat order directly, including writes the current pane has not observed.
 export async function latestRetryUser(db: Or3DB, threadId: string): Promise<Message | undefined> {
     const rows = await db.messages.where('thread_id').equals(threadId).toArray();
-    return rows.sort(compareMessageOrder)
-        .findLast(row => row.role === 'user' && !row.deleted && !isSupersededMessage(row));
+    return selectedAnswerVersionRows(rows.sort(compareMessageOrder)).findLast(row => row.role === 'user');
 }
 
 // Convert Message schema type to MessageEntity for hooks
@@ -657,10 +655,13 @@ async function appendMessageGroupToDb(
         'rw', getWriteTxTableNames(db, 'messages', { include: ['threads'] }), async () => {
             // Validate the complete selected revision before any writes. All old
             // rows and the admitted replacement share one outbox transaction.
+            let selection: ReturnType<typeof nextAnswerSelection> | undefined;
             if (replacements.length) {
-                const latest = await latestRetryUser(db, prepared.value.thread_id);
+                const rows = await db.messages.where('thread_id').equals(prepared.value.thread_id).toArray();
+                const latest = selectedAnswerVersionRows(rows.sort(compareMessageOrder)).findLast(row => row.role === 'user');
                 if (!latest || !replacements.some(({ expected }) => expected.id === latest.id))
                     throw new Error('Only the latest turn can be retried.');
+                if (groupId && versionId) selection = nextAnswerSelection(rows, groupId, versionId);
             }
             for (const { expected } of replacements) {
                 const current = await db.messages.get(expected.id);
@@ -668,8 +669,13 @@ async function appendMessageGroupToDb(
                     || current.clock !== expected.clock || current.hlc !== expected.hlc)
                     throw new Error('Retry target changed; reload the conversation.');
             }
-            for (const { row } of replacements) await db.messages.put(row);
-            const first = await appendMessageRows(db, prepared.value);
+            for (const { row } of replacements) {
+                if (row.id === retryUser?.id && selection) row.data = { ...dataRecord(row.data), ...selection };
+                await db.messages.put(row);
+            }
+            const first = await appendMessageRows(db, selection
+                ? { ...prepared.value, data: { ...dataRecord(prepared.value.data), ...selection } }
+                : prepared.value);
             const second = preparedCompanion ? await appendMessageRows(db, preparedCompanion.value) : undefined;
             return [first, second] as [Message, Message?];
         },

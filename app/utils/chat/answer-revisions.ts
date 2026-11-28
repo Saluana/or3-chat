@@ -1,3 +1,5 @@
+import { generateHLC } from '~/core/sync/hlc';
+import { compareSyncRevision } from '~~/shared/sync/revision';
 import { isSupersededMessage } from './transcript';
 
 type TurnRow = { id: string; role: string; data?: unknown; deleted?: boolean };
@@ -25,6 +27,40 @@ export function answerRevisionData(groupId: string, versionId: string) {
     return { answer_revision_group: groupId, answer_revision_id: versionId };
 }
 
+function selectionOf(row: TurnRow) {
+    const selection = rowData(row).answer_revision_selection as Record<string, unknown> | undefined;
+    if (typeof selection?.version_id !== 'string' || typeof selection.hlc !== 'string'
+        || typeof selection.clock !== 'number' || !Number.isSafeInteger(selection.clock) || selection.clock < 1) return;
+    return { clock: selection.clock, hlc: selection.hlc, opId: selection.version_id };
+}
+
+/** The two changed prompts carry the same selection intent through row-level sync. */
+export function nextAnswerSelection(rows: readonly TurnRow[], groupId: string, versionId: string) {
+    let clock = 0;
+    for (const row of rows) {
+        if (row.role === 'user' && answerRevisionOf(row)?.groupId === groupId)
+            clock = Math.max(clock, selectionOf(row)?.clock ?? 0);
+    }
+    return { answer_revision_selection: { clock: clock + 1, hlc: generateHLC(), version_id: versionId } };
+}
+
+/** New tool results inherit the answer revision from their stored assistant link. */
+export function answerRevisionMembership(rows: readonly TurnRow[]) {
+    const membership = new Map<string, AnswerRevision>();
+    for (const row of rows) {
+        const revision = answerRevisionOf(row);
+        if (revision) membership.set(row.id, revision);
+    }
+    for (const row of rows) {
+        if (membership.has(row.id) || (row.role !== 'assistant' && row.role !== 'tool')) continue;
+        const data = rowData(row);
+        const parent = data.parent_assistant_id ?? data.parent_turn_id;
+        const revision = typeof parent === 'string' ? membership.get(parent) : undefined;
+        if (revision) membership.set(row.id, revision);
+    }
+    return membership;
+}
+
 /** Rows are in canonical order. Explicit tool and turn links take precedence over position. */
 export function rowsForUserTurn<T extends TurnRow>(rows: readonly T[], user: T): T[] {
     const userPosition = rows.indexOf(user);
@@ -44,27 +80,52 @@ export function rowsForUserTurn<T extends TurnRow>(rows: readonly T[], user: T):
 }
 
 /** Projects the selected turns. A reference anchor still points to its exact answer. */
-export function projectAnswerVersionRows<T extends TurnRow>(rows: readonly T[], cutoff?: T): Array<T & { answerVersions?: AnswerVersionNavigation }> {
+export function selectedAnswerVersionRows<T extends TurnRow>(rows: readonly T[], cutoff?: T): T[] {
     const live = rows.filter(row => !row.deleted);
-    const visible = live.filter(row => !isSupersededMessage(row));
-    if (cutoff) {
-        const pinned = answerRevisionOf(cutoff);
-        const position = live.findIndex(row => row.id === cutoff.id);
-        const active = pinned && visible.find(row => row.role === 'user' && answerRevisionOf(row)?.groupId === pinned.groupId);
-        const excluded = active && active.id !== pinned?.versionId ? new Set(rowsForUserTurn(visible, active).map(row => row.id)) : undefined;
-        return live.slice(0, position + 1).flatMap(row => {
-            if (excluded?.has(row.id)) return [];
-            if (!isSupersededMessage(row)) return [row];
-            const revision = answerRevisionOf(row);
-            if (!pinned || revision?.groupId !== pinned.groupId || revision.versionId !== pinned.versionId) return [];
-            const { superseded_by: _archived, ...data } = rowData(row);
-            return [{ ...row, data }];
-        });
+    const slice = cutoff ? live.slice(0, live.findIndex(row => row.id === cutoff.id) + 1) : live;
+    if (!live.some(row => row.role === 'user' && answerRevisionOf(row))) {
+        return slice.filter(row => !isSupersededMessage(row));
     }
 
-    const versions = new Map<string, string[]>();
+    const membership = answerRevisionMembership(live);
+    const byId = new Map(live.map(row => [row.id, row]));
+    const selected = new Map<string, string>();
+    const intents = new Map<string, NonNullable<ReturnType<typeof selectionOf>>>();
     for (const row of live) {
-        const revision = row.role === 'user' ? answerRevisionOf(row) : undefined;
+        const revision = row.role === 'user' ? membership.get(row.id) : undefined;
+        if (!revision) continue;
+        // Older conversations can already contain two active revisions. Canonical
+        // row order breaks that tie and is unaffected by an ordinary edit.
+        if (!isSupersededMessage(row)) selected.set(revision.groupId, row.id);
+        const intent = selectionOf(row);
+        const previous = intents.get(revision.groupId);
+        if (intent && (!previous || compareSyncRevision(intent, previous) > 0))
+            intents.set(revision.groupId, intent);
+    }
+    for (const [groupId, intent] of intents) {
+        const target = byId.get(intent.opId);
+        if (target?.role === 'user' && membership.get(target.id)?.groupId === groupId)
+            selected.set(groupId, target.id);
+    }
+    const pinned = cutoff && membership.get(cutoff.id);
+    if (pinned) selected.set(pinned.groupId, pinned.versionId);
+    return slice.flatMap(row => {
+        const revision = membership.get(row.id);
+        if (!revision) return isSupersededMessage(row) ? [] : [row];
+        if (selected.get(revision.groupId) !== revision.versionId) return [];
+        if (!isSupersededMessage(row)) return [row];
+        const { superseded_by: _archived, ...data } = rowData(row);
+        return [{ ...row, data }];
+    });
+}
+
+export function projectAnswerVersionRows<T extends TurnRow>(rows: readonly T[], cutoff?: T): Array<T & { answerVersions?: AnswerVersionNavigation }> {
+    const visible = selectedAnswerVersionRows(rows, cutoff);
+    if (cutoff) return visible;
+
+    const versions = new Map<string, string[]>();
+    for (const row of rows) {
+        const revision = !row.deleted && row.role === 'user' ? answerRevisionOf(row) : undefined;
         if (!revision) continue;
         const group = versions.get(revision.groupId);
         if (group) group.push(row.id);

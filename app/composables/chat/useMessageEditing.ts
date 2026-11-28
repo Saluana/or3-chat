@@ -100,7 +100,17 @@ export function useMessageEditing(message: EditableMessageSource) {
     const original = ref('');
     const saving = ref(false);
     let disposed = false;
-    if (getCurrentScope()) onScopeDispose(() => { disposed = true; });
+    function guardPendingSave(event: BeforeUnloadEvent) {
+        event.preventDefault();
+        event.returnValue = '';
+    }
+    function removeUnloadGuard() {
+        if (typeof window !== 'undefined') window.removeEventListener('beforeunload', guardPendingSave);
+    }
+    if (getCurrentScope()) onScopeDispose(() => {
+        disposed = true;
+        removeUnloadGuard();
+    });
     // Capture scalar authorization fields: session objects may update in place.
     const identity = () => {
         const session = getLocalWorkspaceSession();
@@ -199,6 +209,7 @@ export function useMessageEditing(message: EditableMessageSource) {
         try {
             saving.value = true;
             assertCurrent();
+            if (typeof window !== 'undefined') window.addEventListener('beforeunload', guardPendingSave);
             const db = origin!.db;
             const existing = await db.messages.get(id);
             assertCurrent();
@@ -236,6 +247,7 @@ export function useMessageEditing(message: EditableMessageSource) {
             editing.value = false;
             return 'saved';
         } finally {
+            removeUnloadGuard();
             saving.value = false;
         }
     }

@@ -575,17 +575,25 @@ describe('continue/retry regressions', () => {
         expect(tailAssistant.value?.error).toBe('stream_interrupted');
     });
 
-    it('continue sends tool calls with their results, as OpenAI requires', async () => {
+    it('continues one selected answer with its tool calls and results', async () => {
         // Stopped mid-turn: one call finished (durable tool row), one never did.
+        const revision = { answer_revision_group: 'archived-u', answer_revision_id: 'u1',
+            answer_revision_selection: { clock: 2, hlc: 'selected', version_id: 'u1' } };
         const rows = [
-            { id: 'u1', role: 'user', thread_id: 't1', index: 1, content: 'Rate the chapters', data: { content: 'Rate the chapters' }, deleted: false, clock: 1 },
+            { id: 'u1', role: 'user', thread_id: 't1', index: 1, content: 'Rate the chapters', data: { ...revision, content: 'Rate the chapters' }, deleted: false, clock: 1 },
             { id: 'a1', role: 'assistant', thread_id: 't1', index: 2, content: 'Reading chapter one', deleted: false, clock: 1,
-                data: { content: 'Reading chapter one', tool_calls: [
+                data: { ...revision, content: 'Reading chapter one', tool_calls: [
                     { id: 'c1', name: 'workspace_read', args: '{"item":{"kind":"document","id":"d1"}}', status: 'complete', result: 'Chapter one text', text_offset: 19 },
                     { id: 'c2', name: 'workspace_read', args: '{"item":{"kind":"document","id":"d2"}}', status: 'loading' },
                 ] } },
             { id: 'r1', role: 'tool', thread_id: 't1', index: 3, content: 'Chapter one text', deleted: false, clock: 1,
                 data: { tool_call_id: 'c1', tool_name: 'workspace_read', parent_assistant_id: 'a1' } },
+            { id: 'archived-u', role: 'user', thread_id: 't1', index: -2, deleted: false, clock: 1, data: {
+                ...revision, answer_revision_id: 'archived-u', content: 'Rate the chapters',
+            } },
+            { id: 'archived-a', role: 'assistant', thread_id: 't1', index: -1, deleted: false, clock: 1, data: {
+                ...revision, answer_revision_id: 'archived-u', content: 'Discarded answer',
+            } },
         ];
         dbState.messagesGet.mockResolvedValue(rows[1]);
         dbState.where.mockReturnValue({ between: vi.fn().mockReturnThis(), filter: vi.fn().mockReturnThis(), toArray: vi.fn().mockResolvedValue(rows) });
@@ -606,6 +614,8 @@ describe('continue/retry regressions', () => {
         }, 'a1');
 
         const history = vi.mocked(buildOpenRouterMessagesForSend).mock.calls[0]![0].effectiveMessages;
+        expect(history.filter(row => row.role === 'assistant').map(row => row.id)).toEqual(['a1']);
+        expect(history.filter(row => row.role === 'user').map(row => row.id)).toEqual(['u1', expect.stringMatching(/^continue-/)]);
         const { encodeOpenAiRequest } = await import('~~/shared/openai/adapter');
         const { encodeOpenAiResponseRequest } = await import('~~/shared/openai/responses');
         const { input } = encodeOpenAiResponseRequest(encodeOpenAiRequest({ model: '@openai/gpt-5.4', messages: history })) as { input: Array<{ type?: string; call_id?: string }> };

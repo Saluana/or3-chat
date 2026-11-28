@@ -1,7 +1,7 @@
 import type { Ref } from 'vue';
 import type { ChatMessage, ContentPart, SendMessageParams, SendResult } from '~/utils/chat/types';
 import { hasDurableSendAcceptance } from '~/utils/chat/types';
-import { isSupersededMessage, storedMessagesToCanonicalTranscript, projectTranscriptForOpenRouter } from '~/utils/chat/transcript';
+import { storedMessagesToCanonicalTranscript, projectTranscriptForOpenRouter } from '~/utils/chat/transcript';
 import { resolveThreadProjection } from '~/utils/chat/compaction/history';
 import { getDb, getWorkspaceGeneration } from '~/db/client';
 import { compareMessageOrder, latestRetryUser, messagesByThread } from '~/db/messages';
@@ -9,7 +9,7 @@ import { parseFileHashes } from '~/db/files-util';
 import { reportError, err } from '~/utils/errors';
 import type { StoredMessage } from './types';
 import { normalizeStreamingMessage } from '~/utils/chat/messages';
-import { answerRevisionOf, rowsForUserTurn } from '~/utils/chat/answer-revisions';
+import { answerRevisionOf, rowsForUserTurn, selectedAnswerVersionRows } from '~/utils/chat/answer-revisions';
 
 export type RetryMessageContext = {
     loading: Ref<boolean>;
@@ -57,9 +57,7 @@ export async function retryMessageImpl(
             ((await messagesByThread(threadId, db)) as
                 | StoredMessage[]
                 | undefined) || [];
-        const ordered = dbMessages
-            .filter((message) => !message.deleted && !isSupersededMessage(message))
-            .sort(compareMessageOrder);
+        const ordered = selectedAnswerVersionRows(dbMessages.sort(compareMessageOrder));
 
         const userMsg = ordered.findLast(message => message.role === 'user');
         if (!userMsg || !ownsRetry()) return undefined;

@@ -4,6 +4,7 @@
         :class="compactionJourney ? 'flex flex-col' : undefined"
         data-testid="production-chat-journey"
         :data-retry-held="retryHeld || undefined"
+        :data-edit-held="editHeld || undefined"
     >
         <span class="sr-only" data-testid="chat-journey-thread-id">
             {{ threadId || 'new-thread' }}
@@ -116,11 +117,20 @@ async function qualifyHistory() {
 const turnActionsJourney = useRoute().query.turns === '1';
 const answerRevisionsJourney = useRoute().query.revisions === '1';
 const holdRetryJourney = useRoute().query.holdRetry === '1';
+const holdEditJourney = useRoute().query.holdEdit === '1';
 const retryHeld = ref(false);
 const holdRetry = async () => {
     retryHeld.value = true;
     await new Promise<void>(resolve => window.addEventListener('or3:e2e:release-retry', () => resolve(), { once: true }));
     retryHeld.value = false;
+};
+const editHeld = ref(false);
+const holdEdit = async ({ entity }: { entity: { data?: unknown } }) => {
+    const data = entity.data as Record<string, unknown> | undefined;
+    if (typeof data?.edit_id !== 'string' || data.superseded_by) return;
+    editHeld.value = true;
+    await new Promise<void>(resolve => window.addEventListener('or3:e2e:release-edit', () => resolve(), { once: true }));
+    editHeld.value = false;
 };
 const contextJourney = useRoute().query.context === '1';
 onErrorCaptured((error) => {
@@ -575,6 +585,7 @@ onMounted(async () => {
     hooks.addFilter('ai.chat.messages:filter:before_send', emptyInput);
     hooks.addAction('ai.chat.stream:action:error', recordNativeError);
     if (holdRetryJourney) hooks.addAction('ai.chat.retry:action:before', holdRetry);
+    if (holdEditJourney) hooks.addAction('db.messages.upsert:action:before', holdEdit);
     installDeterministicFetch();
     // Set scripted routing before seed-time auxiliary compactions, too.
     localStorage.setItem('or3:server-route-available', JSON.stringify({ available: false, timestamp: Date.now() }));
@@ -815,6 +826,7 @@ onBeforeUnmount(() => {
     hooks.removeFilter('ai.chat.messages:filter:before_send', emptyInput);
     hooks.removeAction('ai.chat.stream:action:error', recordNativeError);
     if (holdRetryJourney) hooks.removeAction('ai.chat.retry:action:before', holdRetry);
+    if (holdEditJourney) hooks.removeAction('db.messages.upsert:action:before', holdEdit);
     restoreFetch?.();
 });
 </script>
