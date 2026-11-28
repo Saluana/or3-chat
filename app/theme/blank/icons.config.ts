@@ -31,6 +31,7 @@ export default {
     'chat.model.settings': 'blank-solar:tuning-linear',
     'chat.model.catalog': 'blank-solar:bot-linear',
     'chat.system_prompt': 'blank-solar:document-text-linear',
+    'chat.system_prompt.edit': 'blank-solar:pen-new-square-linear',
     'chat.web_search': 'blank-solar:global-linear',
     'chat.variant.off': 'blank-solar:minus-linear',
     'chat.variant.online': 'blank-solar:global-linear',

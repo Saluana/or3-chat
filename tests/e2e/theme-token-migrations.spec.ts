@@ -145,7 +145,8 @@ test('UI audit: prompt title and instructions are named and remain saved after r
     await openResponsiveChat(page, 'blank', 'light');
     const openPrompts = async () => {
         await page.getByRole('button', { name: 'Settings', exact: true }).click();
-        await page.getByRole('button', { name: /^Manage system prompts/ }).click();
+        await page.getByRole('button', { name: /^System prompts/ }).click();
+        await page.getByRole('button', { name: 'Open full library', exact: true }).click();
     };
     await openPrompts();
     await page.getByRole('button', { name: 'Create prompt', exact: true }).click();

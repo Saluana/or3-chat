@@ -126,7 +126,7 @@ test('chat tool suspension preserves selections, defaults and draft ownership ac
     await info.attach('provider-requests', { contentType: 'application/json', path: receipt });
 });
 
-test('mobile chat settings keep one sheet height from settings to tool category and back', async ({ page }) => {
+test('mobile chat settings keep one sheet height through library and tools navigation', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 520 });
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.route(/https?:\/\/(?!127\.0\.0\.1|localhost)/, route =>
@@ -143,10 +143,29 @@ test('mobile chat settings keep one sheet height from settings to tool category 
 
     // Scroll to the lower actions without moving the sheet or its close button.
     const close = sheet.getByRole('button', { name: 'Close chat settings' });
-    const lowerAction = sheet.getByRole('button', { name: 'Manage system prompts' });
+    const lowerAction = sheet.getByRole('button', { name: /^System prompts/ });
     await lowerAction.scrollIntoViewIfNeeded();
     await expect(lowerAction).toBeInViewport({ ratio: 1 });
     await expect(close).toBeInViewport({ ratio: 1 });
+
+    await lowerAction.click();
+    const promptSearch = sheet.getByRole('textbox', { name: 'Search system prompts' });
+    const promptAction = sheet.getByRole('button', { name: /^(Using|Switch to) / });
+    await expect(promptAction).toBeVisible();
+    expect(await sheetHeight()).toBe(initialHeight);
+    await promptSearch.fill('unmatched test prompt 81759');
+    await expect(sheet.getByText('No prompts match.')).toBeVisible();
+    await expect(promptAction).toHaveCount(0);
+    expect(await sheetHeight()).toBe(initialHeight);
+    await promptSearch.clear();
+    await expect(promptAction).toBeVisible();
+    expect(await sheetHeight()).toBe(initialHeight);
+    await sheet.getByRole('button', { name: 'Back to chat settings' }).click();
+
+    await sheet.getByRole('button', { name: /^Model catalog/ }).click();
+    await expect(sheet.getByRole('textbox', { name: 'Search models' })).toBeVisible();
+    expect(await sheetHeight()).toBe(initialHeight);
+    await sheet.getByRole('button', { name: 'Back to chat settings' }).click();
 
     await sheet.getByRole('button', { name: 'Tools', exact: true }).click();
     await expect(sheet.getByRole('heading', { name: 'Tools', exact: true })).toBeVisible();

@@ -19,6 +19,7 @@ async function openAiSettings(page: Page, view: 'openai' | 'fast') {
 async function chooseModel(page: Page, name: string) {
     await page.getByRole('button', { name: 'Settings', exact: true }).last().click();
     await page.getByRole('button', { name: 'Current model' }).click();
+    await page.getByRole('button', { name: 'Open full catalog', exact: true }).click();
     const catalog = page.getByRole('dialog', { name: 'Model catalog', exact: true });
     await catalog.getByRole('listitem').filter({ hasText: name.replace(' (OpenAI key)', '') }).getByRole('button', { name: 'Use model', exact: true }).click();
 }
@@ -546,6 +547,7 @@ test('SQLite admin grants apply and revoke to cached workspace sessions', async 
         await settingsPage.getByRole('button', { name: 'Settings', exact: true }).last().click();
         await expect(settingsPage.getByRole('button', { name: 'Current model', exact: true })).toContainText('Fixture Router');
         await settingsPage.getByRole('button', { name: /^Model catalog/ }).click();
+        await settingsPage.getByRole('button', { name: 'Open full catalog', exact: true }).click();
         const workspaceCatalog = settingsPage.getByRole('dialog', { name: 'Model catalog', exact: true });
         await expect(workspaceCatalog.locator('[data-model-id="fixture/image"]')).toHaveCount(0);
         await workspaceCatalog.getByRole('button', { name: /^Workspace picks/ }).click();
@@ -868,6 +870,7 @@ test('catalog publishes platforms independently and keeps saved models during an
     await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible({ timeout: 45_000 });
     await page.getByRole('button', { name: 'Settings', exact: true }).last().click();
     await page.getByRole('button', { name: /^Model catalog/ }).click();
+    await page.getByRole('button', { name: 'Open full catalog', exact: true }).click();
     const catalog = page.getByRole('dialog', { name: 'Model catalog', exact: true });
     await expect(catalog.locator('[data-model-id="@openai/gpt-6-luna"]')).toBeVisible();
     await expect(catalog.getByText(/loading models/i)).toBeHidden();
