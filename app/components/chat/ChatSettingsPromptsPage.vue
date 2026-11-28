@@ -80,7 +80,7 @@
         </div>
 
         <!-- One button that says what it will do; the prompt in use reads as a status. -->
-        <div class="settings-page-footer">
+        <div v-if="highlightedInView" class="settings-page-footer">
             <UButton
                 v-if="highlightedIsCurrent"
                 v-bind="theme.inUseProps.value"
@@ -213,6 +213,11 @@ const savedRows = computed<PromptRow[]>(() =>
             searchText: `${prompt.title} ${description}`.toLowerCase(),
         };
     })
+);
+
+/** The bar only acts on a row the current search still shows. */
+const highlightedInView = computed(() =>
+    allSections.value.some((section) => section.rows.some((row) => row.value === highlighted.value))
 );
 
 const allSections = computed(() => {

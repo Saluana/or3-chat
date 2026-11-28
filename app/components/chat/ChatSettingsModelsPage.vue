@@ -134,7 +134,7 @@
             </div>
 
             <!-- One button that says what it will do; the model in use reads as a status. -->
-            <div v-if="highlightedModel" class="settings-page-footer settings-page-actions">
+            <div v-if="highlightedModel && highlightedInView" class="settings-page-footer settings-page-actions">
                 <UButton
                     v-if="highlightedIsCurrent"
                     v-bind="theme.inUseProps.value"
@@ -475,6 +475,10 @@ const highlightedName = computed(() => {
     const colon = name.indexOf(': ');
     return colon > 0 ? name.slice(colon + 2) : name;
 });
+/** The bar only acts on a row the list currently renders. */
+const highlightedInView = computed(() =>
+    sections.value.some((section) => section.rows.some((row) => row.id === highlightedId.value))
+);
 const highlightedIsCurrent = computed(
     () => !!highlightedModel.value && isSelected(highlightedModel.value)
 );

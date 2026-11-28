@@ -350,6 +350,8 @@ describe('ChatSettingsPopover options layout', () => {
         await wrapper.findAll('button').find(button => button.text().includes('System prompts'))!.trigger('click');
         await wrapper.find('[aria-label="Search system prompts"]').setValue('review');
         expect(wrapper.findAll('.settings-page-row-title').map(title => title.text())).toEqual(['Code reviewer']);
+        // Default (still highlighted) is filtered out, so the bar steps aside.
+        expect(wrapper.find('.settings-page-use').exists()).toBe(false);
 
         // Edit appears only on a highlighted saved prompt.
         expect(wrapper.find('[aria-label="Edit prompt"]').exists()).toBe(false);

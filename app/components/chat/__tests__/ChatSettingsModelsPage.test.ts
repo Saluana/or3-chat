@@ -193,6 +193,8 @@ describe('ChatSettingsModelsPage', () => {
         await wrapper.findAll('.settings-page-chip')[1]!.trigger('click');
         expect(rowIds(wrapper)).toEqual([]);
         expect(wrapper.text()).toContain('No favorite models yet');
+        // The bar never acts on a model the list no longer shows.
+        expect(wrapper.find('.settings-page-use').exists()).toBe(false);
 
         await wrapper.findAll('.settings-page-chip')[0]!.trigger('click');
         menuItem(wrapper, 'Free').onUpdateChecked!(true);
