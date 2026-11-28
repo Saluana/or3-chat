@@ -1,0 +1,48 @@
+name: Final merged private staging (encrypted)
+on:
+  push:
+    branches: [codex/staging-build-final-402523f28203]
+    paths: ['.github/workflows/staging-candidate-1127.yml', '.github/staging-1127/**']
+permissions:
+  contents: read
+concurrency:
+  group: staging-candidate-final-402523f28203
+  cancel-in-progress: false
+jobs:
+  build:
+    if: github.event_name == 'push' && github.repository == 'Saluana/or3-chat' && github.ref == 'refs/heads/codex/staging-build-final-402523f28203'
+    timeout-minutes: 35
+    runs-on: ubuntu-latest
+    env:
+      APP_SHA: 402523f28203bfc2b290e5577e12554617073baf
+      CLERK_SHA: 1acc291b866cc7d50aa55fbc42ce3e75db357f2f
+      SECURITY_SHA: cc4a80e4c324b9f64216112fc36945de10e8f798
+      IMAGE_TAG: or3-private-staging:final-402523f28203-clerk
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24.22.1
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - uses: aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514
+        with:
+          version: v0.70.0
+      - name: Build, scan and encrypt staging-only image
+        env:
+          DATA: ${{ runner.temp }}/or3-encrypted-receipt
+        run: bash .github/staging-1127/build.sh
+      - name: Upload encrypted archive and source-only receipt
+        uses: actions/upload-artifact@v7
+        with:
+          name: or3-staging-final-402523f28203-encrypted
+          path: |
+            ${{ runner.temp }}/or3-encrypted-receipt/staging-candidate.cms
+            ${{ runner.temp }}/or3-encrypted-receipt/receipt.json
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
