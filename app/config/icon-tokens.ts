@@ -28,6 +28,7 @@ export const DEFAULT_ICONS = {
     'chat.model.settings': 'pixelarticons:sliders',
     'chat.model.catalog': 'pixelarticons:android',
     'chat.system_prompt': 'pixelarticons:script-text',
+    'chat.system_prompt.edit': 'pixelarticons:edit-box',
     'chat.web_search': 'pixelarticons:globe',
     'chat.variant.off': 'pixelarticons:minus',
     'chat.variant.online': 'pixelarticons:globe',

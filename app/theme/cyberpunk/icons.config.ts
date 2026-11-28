@@ -23,6 +23,7 @@ export default <IconMap>{
     'chat.model.settings': 'carbon:settings-adjust',
     'chat.model.catalog': 'carbon:bot',
     'chat.system_prompt': 'carbon:script',
+    'chat.system_prompt.edit': 'carbon:edit',
     'chat.web_search': 'carbon:earth',
     'chat.message.continue': 'carbon:continue',
 

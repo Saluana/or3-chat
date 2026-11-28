@@ -132,7 +132,7 @@ const theme = useSettingsLibraryTheme();
 const searchIcon = useIcon('ui.search');
 const promptIcon = useIcon('chat.system_prompt');
 const checkIcon = useIcon('ui.check');
-const editIcon = useIcon('ui.edit');
+const editIcon = useIcon('chat.system_prompt.edit');
 
 const query = ref('');
 
