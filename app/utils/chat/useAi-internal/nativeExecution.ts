@@ -11,6 +11,7 @@ import { newId } from '~/db/util';
 import { serializeFileHashes } from '~/db/files-util';
 import { asAppError, reportError } from '~/utils/errors';
 import { errorDiagnostics } from '~~/shared/errors';
+import { readAiCompletionNotice } from '~~/shared/ai/events';
 import { ToolIterationLimitError } from '~~/shared/chat/stream-errors';
 import { contextAdmissionFailureReason } from '~~/shared/chat/context-budget';
 import { startBackgroundStream, prepareOpenRouterRequest } from '~/utils/chat/openrouterStream';
@@ -84,10 +85,10 @@ export function createNativeExecution(ports: {
                 throw Object.assign(new Error('A final request filter changed the reviewed lossy candidate. Inspect the omissions again.'),
                     { code: 'context_full' });
             }
-            const { retryReplacement: _replacement, onUserPersisted: _persisted, historyOverride: _history, lossyConfirmation: _confirmation, inspectLossyRequest: _inspect, ...savedInput } = recoveryInput;
+            const { retryReplacement: _replacement, retryRecoveryRequestId: _recovery, onUserPersisted: _persisted, historyOverride: _history, lossyConfirmation: _confirmation, inspectLossyRequest: _inspect, ...savedInput } = recoveryInput;
             // Durable before inference: rejection or crash cannot append another user turn.
             const checkpoint = await saveNativeRecoveryCheckpoint({ db: requestScope.originDb,
-                requestId, threadId: requestThreadId, userMessageId: userDbMsg.id, assistantMessageId: assistantDbMsg.id,
+                requestId, threadId: requestThreadId, user: userDbMsg, assistantMessageId: assistantDbMsg.id,
                 savedInput, messages: orMessages, tools: advertisedToolDefs, delegationDefaults,
                 projectContext: () => requestScope.projectContext, projectQuery,
                 masterPrompt: () => useAiSettings().settings.value.masterSystemPrompt, taskPrompt: ports.taskPrompt,
@@ -356,7 +357,7 @@ export function createNativeExecution(ports: {
                             ),
                             messageError:
                                 completion.status === 'complete'
-                                    ? null
+                                    ? readAiCompletionNotice(completion.error)
                                     : completion.status === 'aborted'
                                       ? 'stopped'
                                       : (completion.error ??
@@ -479,7 +480,7 @@ export function createNativeExecution(ports: {
                 return { status: 'detached', requestId, reason: 'detached',
                     userMessageId: userDbMsg.id, assistantMessageId: assistantDbMsg.id };
             }
-            await runForegroundStreamLoop({
+            const completionNotice = await runForegroundStreamLoop({
                 chatLimits,
                 apiKey: streamApiKey,
                 modelId,
@@ -539,6 +540,7 @@ export function createNativeExecution(ports: {
             requestScope.message = current;
             const finalization = await finalizeRequest(requestScope, {
                 outcome: 'completed',
+                messageError: completionNotice,
                 content: incoming,
                 reasoning: current.reasoning_text ?? null,
                 toolCalls: current.toolCalls ?? null,

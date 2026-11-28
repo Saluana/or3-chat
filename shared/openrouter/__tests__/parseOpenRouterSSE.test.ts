@@ -50,13 +50,23 @@ describe('parseOpenRouterSSE', () => {
 
     it('retains explicit provider refusal for auxiliary consumers without converting it into text', async () => {
         const frame = { choices: [{ delta: { refusal: 'Unable to summarize' }, finish_reason: 'stop' }] };
-        expect(await collect(streamFromSSE(`data: ${JSON.stringify(frame)}\n\ndata: [DONE]\n\n`))).toEqual([{ type: 'done', refused: true }]);
+        expect(await collect(streamFromSSE(`data: ${JSON.stringify(frame)}\n\ndata: [DONE]\n\n`))).toEqual([{ type: 'done', notice: 'provider_refused', refused: true }]);
     });
     it('marks explicit length termination for auxiliary validation while preserving ordinary streamed text', async () => {
         const frame = { choices: [{ delta: { content: 'Partial answer' }, finish_reason: 'length' }] };
         expect(await collect(streamFromSSE(`data: ${JSON.stringify(frame)}\n\ndata: [DONE]\n\n`)))
-            .toEqual([{ type: 'text', text: 'Partial answer' }, { type: 'done', truncated: true }]);
+            .toEqual([{ type: 'text', text: 'Partial answer' }, { type: 'done', notice: 'output_limit', truncated: true }]);
     });
+    it.each([['length', 'output_limit'], ['content_filter', 'provider_refused']])(
+        'preserves partial answer text and leaves uncompleted tools undispatched on %s', async (finishReason, notice) => {
+            const frames = [{ choices: [{ delta: { content: 'Partial answer', tool_calls: [
+                { index: 0, function: { arguments: '{' } },
+            ] } }] }, { choices: [{ delta: {}, finish_reason: finishReason }] }];
+            const body = frames.map(frame => `data: ${JSON.stringify(frame)}\n\n`).join('');
+            expect(await collect(streamFromSSE(body))).toEqual([
+                { type: 'text', text: 'Partial answer' }, { type: 'done', notice, ...(notice === 'output_limit' ? { truncated: true } : { refused: true }) },
+            ]);
+        });
     it('preserves valid final usage after a finish reason, empty choices and fragmented transport without duplicate accounting', async () => {
         const frames = [
             { id: 'provider-request', model: 'large-model', choices: [{ delta: { content: 'Settled answer' }, finish_reason: 'stop' }] },

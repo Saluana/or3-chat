@@ -8,6 +8,7 @@ import { isStaleForegroundGeneration, remainingForegroundLeaseMs } from '~/utils
 import { deriveMessageContent } from '~/utils/chat/messages';
 import { ensureUiMessage } from '~/utils/chat/uiMessages';
 import { projectTranscriptForOpenRouter, storedMessagesToCanonicalTranscript } from '~/utils/chat/transcript';
+import { readAiCompletionNotice } from '~~/shared/ai/events';
 import { createChatRequest, finalizeRequest, projectTerminalMessages, type ChatRequest, type RequestFinalization } from './requestController';
 import type { StoredMessage } from './nativeExecutionTypes';
 import type { createChatViewProjection } from './viewProjection';
@@ -345,7 +346,7 @@ export function createBackgroundAttachmentCoordinator(ports: {
                     ? 'stopped'
                     : outcome === 'failed'
                       ? presentError(update.status.error, { code: 'ERR_STREAM_FAILURE' }).message
-                      : null;
+                      : readAiCompletionNotice(update.status.error);
             if (outcome === 'failed' && request.ownsView()) reportError(update.status.error, {
                 code: 'ERR_STREAM_FAILURE', tags: { domain: 'chat', stage: 'background' },
             });

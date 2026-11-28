@@ -184,9 +184,11 @@ export function createTurnPreparation(ports: {
         }
 
         // Reuse the already filtered native payload, never request/delegation hooks.
+        const requiredRecoveryId = sendMessagesParams.retryRecoveryRequestId;
         if (requestScope.threadId && !sendMessagesParams.historyOverride) {
             const recovery = await requestScope.originDb.chat_request_recoveries.get(requestScope.threadId);
-            if (recovery && recovery.input_fingerprint === await recoveryInputFingerprint(content, sendMessagesParams)
+            if (recovery && (!requiredRecoveryId || recovery.request_id === requiredRecoveryId)
+                && recovery.input_fingerprint === await recoveryInputFingerprint(content, sendMessagesParams)
                 && !await discardStaleRecovery(requestScope.originDb, recovery)) {
                 // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- A durable checkpoint can be written by a newer client.
                 if (recovery.version !== 1)
@@ -196,6 +198,9 @@ export function createTurnPreparation(ports: {
                 return early(await recoverNativeTurn(requestScope, recovery, sendMessagesParams));
             }
         }
+
+        if (requiredRecoveryId)
+            return early({ status: 'rejected', requestId, reason: 'unavailable', error: 'The saved attempt changed. Retry the latest turn again.' });
 
         // Extract extra text parts early so we can account for them in validation.
         // Large pastes (>600 words) are captured into extraTextParts while the

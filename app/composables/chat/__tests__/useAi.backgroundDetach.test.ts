@@ -203,6 +203,7 @@ vi.mock('~/utils/files/attachments', () => ({
 
 vi.mock('~/db/messages', async (importOriginal) => ({
     compareMessageOrder: (await importOriginal<typeof import('~/db/messages')>()).compareMessageOrder,
+    latestRetryUser: (await importOriginal<typeof import('~/db/messages')>()).latestRetryUser,
     patchMessageInDb: async (_db: unknown, id: string, patch: any) => {
         const existing = messageStore.get(id);
         if (existing)
@@ -898,6 +899,7 @@ describe('useChat background detach race', () => {
     });
     it('does not replay a saved recovery into a different conversation after a held row read', async () => {
         runtimeConfigRef.value.public.backgroundStreaming.enabled = false;
+        messageStore.set('recovery-user', { id: 'recovery-user', role: 'user', thread_id: 'thread-1', index: 1 });
         recoveryStore.set('thread-1', { version: 1, thread_id: 'thread-1', request_id: 'old-request',
             user_message_id: 'recovery-user', assistant_message_id: 'recovery-assistant',
             input: { content: 'Origin recovery text', model: 'test-model' } });

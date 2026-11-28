@@ -225,8 +225,6 @@ export function useChatModelSelection(options: {
         await getFavoriteModels();
         if (!process.client || disposed) return;
         if (revision === selectionRevision) await applyChatDefault();
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Unmount can run while applyChatDefault awaits.
-        if (!disposed) window.addEventListener('or3:model-selected', onCatalogModelSelected);
         await catalogHydration;
     });
     const stopWorkspace = subscribeActiveWorkspaceDb(() => {
@@ -236,21 +234,7 @@ export function useChatModelSelection(options: {
         disposed = true;
         stopPolicySubscription();
         stopWorkspace();
-        if (process.client) {
-            window.removeEventListener(
-                'or3:model-selected',
-                onCatalogModelSelected,
-            );
-        }
     });
-
-    function onCatalogModelSelected(event: Event): void {
-        const modelId = (event as CustomEvent<{ modelId?: string }>).detail
-            .modelId;
-        if (modelId && modelId !== selectedModel.value) {
-            selectedModel.value = modelId;
-        }
-    }
 
     // Set only by this composer's own new-chat send that explicitly chose a model.
     let newChatSentAt: number | undefined;

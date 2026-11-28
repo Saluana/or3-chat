@@ -12,6 +12,8 @@ export interface NativeRecoveryCheckpoint {
     version: 1;
     request_id: string;
     user_message_id: string;
+    /** Edit identity of the prompt this payload was built from. */
+    user_edit_id?: string;
     assistant_message_id: string;
     input: SendMessageParams & { content: string };
     input_fingerprint: string;
@@ -51,8 +53,12 @@ export async function recoverySourceFingerprint(db: Or3DB, threadId: string, ass
  * turn fails another way; that turn must use ordinary retry and sending.
  */
 export async function discardStaleRecovery(db: Or3DB, checkpoint: NativeRecoveryCheckpoint): Promise<boolean> {
-    const saved = await db.messages.get(checkpoint.assistant_message_id);
-    if (saved && !saved.deleted && (saved.pending || (saved.error === 'context_full'
+    const [user, saved] = await Promise.all([
+        db.messages.get(checkpoint.user_message_id),
+        db.messages.get(checkpoint.assistant_message_id),
+    ]);
+    if (user && !user.deleted && recoveryUserEditId(user) === checkpoint.user_edit_id
+        && saved && !saved.deleted && (saved.pending || (saved.error === 'context_full'
         && (saved.data as Record<string, unknown> | null)?.request_id === checkpoint.request_id))) return false;
     await db.transaction('rw', db.chat_request_recoveries, async () => {
         const current = await db.chat_request_recoveries.get(checkpoint.thread_id);
@@ -61,12 +67,17 @@ export async function discardStaleRecovery(db: Or3DB, checkpoint: NativeRecovery
     return true;
 }
 
+export function recoveryUserEditId(user: { data?: unknown }): string | undefined {
+    const value = (user.data as Record<string, unknown> | null)?.edit_id;
+    return typeof value === 'string' ? value : undefined;
+}
+
 /** Capture the existing checkpoint before a native request can reach a provider. */
 export async function saveNativeRecoveryCheckpoint(input: {
     db: Or3DB;
     requestId: string;
     threadId: string;
-    userMessageId: string;
+    user: { id: string; data?: unknown };
     assistantMessageId: string;
     savedInput: SendMessageParams & { content: string };
     messages: NativeRecoveryCheckpoint['messages'];
@@ -78,9 +89,11 @@ export async function saveNativeRecoveryCheckpoint(input: {
     taskPrompt: () => unknown;
     cancelled: () => boolean;
 }): Promise<NativeRecoveryCheckpoint> {
+    const editId = recoveryUserEditId(input.user);
     const checkpoint: NativeRecoveryCheckpoint = {
         version: 1, request_id: input.requestId, thread_id: input.threadId,
-        user_message_id: input.userMessageId, assistant_message_id: input.assistantMessageId,
+        user_message_id: input.user.id, assistant_message_id: input.assistantMessageId,
+        ...(editId ? { user_edit_id: editId } : {}),
         input: structuredClone(input.savedInput),
         input_fingerprint: await recoveryInputFingerprint(input.savedInput.content, input.savedInput),
         source_fingerprint: await recoverySourceFingerprint(input.db, input.threadId, input.assistantMessageId,

@@ -1420,6 +1420,7 @@ test('project chat keeps captured context and memory actions without an inline i
     page,
 }, info) => {
     test.setTimeout(120000);
+    await page.addInitScript(() => localStorage.setItem('openrouter_model_catalog_v1', JSON.stringify({ data: [{ id: 'context-fixture-large', name: 'context-fixture-large', context_length: 1000000, supported_parameters: ['tools'], architecture: { input_modalities: ['text', 'image'], output_modalities: ['text'] } }], fetchedAt: Date.now() })));
     await page.route('**openrouter.ai/**', (route) => route.abort());
     await page.goto('/__or3-chat-journey-test?project=1&context=1');
     page.on('console', (message) => {
@@ -1452,13 +1453,9 @@ test('project chat keeps captured context and memory actions without an inline i
     ).toBeVisible({ timeout: 30000 });
     await page.reload();
     await expect(input).toBeVisible({ timeout: 60000 });
-    await page.evaluate(() =>
-        window.dispatchEvent(
-            new CustomEvent('or3:model-selected', {
-                detail: { modelId: 'context-fixture-large' },
-            }),
-        ),
-    );
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await page.getByRole('button', { name: /^Model catalog/ }).click();
+    await page.getByRole('dialog', { name: 'Model catalog', exact: true }).locator('[data-model-id="context-fixture-large"]').getByRole('button', { name: 'Use model', exact: true }).click();
     await page
         .getByRole('button', { name: 'Retry message', exact: true })
         .last()

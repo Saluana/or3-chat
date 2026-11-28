@@ -1,4 +1,4 @@
-import type { AiEvent } from '../ai/events';
+import type { AiCompletionNotice, AiEvent } from '../ai/events';
 import { MAX_SSE_EVENT_BYTES, MAX_TOOL_ARGUMENT_BYTES, utf8Bytes } from '../chat/tool-limits';
 import { OpenRouterProtocolError, OpenRouterProviderError } from '../openrouter/errors';
 import { openAiApiModel, openAiReasoningEfforts } from './models';
@@ -10,6 +10,7 @@ type ResponsesStreamEvent = {
     error?: { message?: string };
     response?: {
         error?: { message?: string };
+        incomplete_details?: { reason?: string } | null;
         output?: Record<string, unknown>[];
         usage?: {
             input_tokens?: number;
@@ -83,7 +84,7 @@ export function encodeOpenAiResponseRequest(body: Record<string, unknown>): Reco
         ...(typeof body.parallel_tool_calls === 'boolean' ? { parallel_tool_calls: body.parallel_tool_calls } : {}) };
 }
 
-/** Convert Responses SSE to OR3 events; incomplete streams never count as success. */
+/** Convert Responses SSE to OR3 events, distinguishing incomplete responses from interrupted transport. */
 export async function* decodeOpenAiResponseStream(stream: ReadableStream<Uint8Array>): AsyncGenerator<AiEvent> {
     const reader = stream.getReader();
     const decoder = new TextDecoder();
@@ -119,9 +120,16 @@ export async function* decodeOpenAiResponseStream(stream: ReadableStream<Uint8Ar
                 if (event.type !== 'response.completed' && event.type !== 'response.incomplete') continue;
                 const response = event.response ?? {};
                 const output = Array.isArray(response.output) ? response.output : [];
+                const incomplete = event.type === 'response.incomplete';
+                const reason = incomplete ? response.incomplete_details?.reason : undefined;
+                const refusedOutput = output.some(item => item.type === 'message' && Array.isArray(item.content)
+                    && item.content.some(part => part?.type === 'refusal'));
+                let notice: AiCompletionNotice | undefined;
+                if (refused || refusedOutput || reason === 'content_filter') notice = 'provider_refused';
+                else if (incomplete) notice = reason === 'max_output_tokens' ? 'output_limit' : 'provider_incomplete';
                 const reasoning = output.filter((item: Record<string, unknown>) => item.type === 'reasoning' && typeof item.encrypted_content === 'string');
                 if (reasoning.length) yield { type: 'provider_state', items: reasoning };
-                for (const item of output) if (event.type === 'response.completed' && item.type === 'function_call') {
+                for (const item of output) if (!notice && item.type === 'function_call') {
                     if (typeof item.call_id !== 'string' || !item.call_id.trim() || typeof item.name !== 'string' || !item.name.trim()
                         || typeof item.arguments !== 'string' || utf8Bytes(item.arguments) > MAX_TOOL_ARGUMENT_BYTES)
                         throw new OpenRouterProtocolError('Invalid OpenAI function call');
@@ -133,7 +141,12 @@ export async function* decodeOpenAiResponseStream(stream: ReadableStream<Uint8Ar
                     prompt_tokens: usage.input_tokens, completion_tokens: usage.output_tokens, model: response.model, response_id: response.id,
                     ...(typeof usage.input_tokens_details?.cached_tokens === 'number' ? { cached_tokens: usage.input_tokens_details.cached_tokens } : {}),
                     ...(typeof usage.output_tokens_details?.reasoning_tokens === 'number' ? { reasoning_tokens: usage.output_tokens_details.reasoning_tokens } : {}) } };
-                yield { type: 'done', ...(event.type === 'response.incomplete' ? { truncated: true as const } : {}), ...(refused ? { refused: true as const } : {}) };
+                yield {
+                    type: 'done',
+                    ...(notice ? { notice } : {}),
+                    ...(incomplete ? { truncated: true } : {}),
+                    ...(notice === 'provider_refused' ? { refused: true } : {}),
+                };
                 return;
             }
             if (utf8Bytes(buffer) > MAX_SSE_EVENT_BYTES) throw new OpenRouterProtocolError('OpenAI response event exceeds the size limit');

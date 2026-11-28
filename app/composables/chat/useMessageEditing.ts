@@ -51,6 +51,7 @@ import { useRuntimeConfig } from '#imports';
 import { getLocalWorkspaceSession } from '~/composables/auth/useLocalWorkspaceSession';
 import { getDb, getWorkspaceGeneration } from '~/db/client';
 import { patchMessageInDb } from '~/db/messages';
+import { newId } from '~/db/util';
 
 /**
  * How a `saveEdit()` call ended:
@@ -65,6 +66,7 @@ export interface EditableMessage {
     id?: string;
     text?: string;
     content?: string;
+    edited?: boolean;
 }
 
 type EditableMessageSource =
@@ -98,7 +100,17 @@ export function useMessageEditing(message: EditableMessageSource) {
     const original = ref('');
     const saving = ref(false);
     let disposed = false;
-    if (getCurrentScope()) onScopeDispose(() => { disposed = true; });
+    function guardPendingSave(event: BeforeUnloadEvent) {
+        event.preventDefault();
+        event.returnValue = '';
+    }
+    function removeUnloadGuard() {
+        if (typeof window !== 'undefined') window.removeEventListener('beforeunload', guardPendingSave);
+    }
+    if (getCurrentScope()) onScopeDispose(() => {
+        disposed = true;
+        removeUnloadGuard();
+    });
     // Capture scalar authorization fields: session objects may update in place.
     const identity = () => {
         const session = getLocalWorkspaceSession();
@@ -197,31 +209,45 @@ export function useMessageEditing(message: EditableMessageSource) {
         try {
             saving.value = true;
             assertCurrent();
+            if (typeof window !== 'undefined') window.addEventListener('beforeunload', guardPendingSave);
             const db = origin!.db;
             const existing = await db.messages.get(id);
             assertCurrent();
             if (!existing || existing.deleted) throw notFound('Message not found');
-            const saved = await patchMessageInDb(db, id, { data: { content: trimmed } }, undefined,
+            let unchanged = false;
+            const saved = await patchMessageInDb(db, id, { data: { content: trimmed, edit_id: newId() } }, undefined,
                 current => {
                     assertCurrent();
-                    return Boolean(current && !current.deleted && current.thread_id === existing.thread_id);
+                    if (!current || current.deleted || current.thread_id !== existing.thread_id) return false;
+                    unchanged = (current.data as Record<string, unknown> | null)?.content === trimmed;
+                    return !unchanged;
                 }, undefined, { tables: ['threads'], assertCurrent: async () => {
                     assertCurrent();
                     const thread = await db.threads.get(existing.thread_id);
                     assertCurrent();
                     if (!thread || thread.deleted) throw notFound('Conversation not found');
                 } });
+            if (unchanged) {
+                editing.value = false;
+                return 'unchanged';
+            }
             if (!saved) throw notFound('Message not found');
             // A committed write can outlive its presentation owner.
-            if (disposed || getMessage() !== m || origin?.db !== getDb()
+            const current = getMessage();
+            if (disposed || current?.id !== id || origin?.db !== getDb()
                 || origin.generation !== getWorkspaceGeneration() || origin.identity !== identity()) return 'saved';
-            // Persist to both fields so renderers using either stay in sync
             const content = (saved.data as Record<string, unknown> | null)?.content;
-            m.content = typeof content === 'string' ? content : trimmed;
-            m.text = m.content;
+            draft.value = typeof content === 'string' ? content : trimmed;
+            // If live history already replaced this projection, it owns the visible text.
+            if (current === m) {
+                m.content = draft.value;
+                m.text = draft.value;
+                m.edited = true;
+            }
             editing.value = false;
             return 'saved';
         } finally {
+            removeUnloadGuard();
             saving.value = false;
         }
     }

@@ -730,22 +730,8 @@ function onSelectModel(m: OpenRouterModel) {
     }
 }
 
-const LAST_MODEL_KEY = 'last_selected_model';
-
 function useSelectedModel(m: OpenRouterModel) {
     void recordRecentModel(m.id).catch(() => {});
-    if (process.client) {
-        try {
-            localStorage.setItem(LAST_MODEL_KEY, m.id);
-        } catch {
-            // storage unavailable (private mode) — still notify listeners
-        }
-        window.dispatchEvent(
-            new CustomEvent('or3:model-selected', {
-                detail: { modelId: m.id },
-            })
-        );
-    }
     emit('select', m.id);
     open.value = false;
 }

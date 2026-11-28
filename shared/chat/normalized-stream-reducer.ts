@@ -1,6 +1,6 @@
 import { addUsageTotals, readMeasuredRequestUsage } from './request-usage';
 import type { RequestUsage, UsageTotals } from './compaction';
-import { normalizeProviderRequestUsage, type AiEvent, type ProviderRequestUsage } from '../ai/events';
+import { normalizeProviderRequestUsage, type AiCompletionNotice, type AiEvent, type ProviderRequestUsage } from '../ai/events';
 import {
     CANONICAL_MESSAGE_FIXED_BYTES,
     MAX_STREAM_OUTPUT_BYTES,
@@ -44,6 +44,7 @@ export type NormalizedStreamState = {
     toolBytes: number;
     /** Per-tool accepted byte estimate, for incremental accounting. */
     toolBytesById: Record<string, number>;
+    completionNotice?: AiCompletionNotice;
     terminal: 'active' | 'complete' | 'aborted' | 'failed';
     error?: string;
 };
@@ -80,6 +81,7 @@ export function beginNormalizedIteration(
         iterationText: '',
         iterationToolCallIds: [],
         terminal: 'active',
+        completionNotice: undefined,
         error: undefined,
     };
 }
@@ -153,7 +155,8 @@ export function reduceNormalizedStreamEvent(
     state: NormalizedStreamState,
     event: AiEvent
 ): NormalizedStreamState {
-    if (state.terminal !== 'active' || event.type === 'done' || event.type === 'provider_state') return state;
+    if (state.terminal !== 'active' || event.type === 'provider_state') return state;
+    if (event.type === 'done') return event.notice ? { ...state, completionNotice: event.notice } : state;
     if (event.type === 'usage') {
         const measurement = normalizeProviderRequestUsage(event.usage);
         if (!measurement) return state;

@@ -137,6 +137,11 @@ export async function acceptUserTurn(input: {
         data: { ...assistantTranscriptData({ turnId: nextUserMessageId, requestId, generationId: streamId, mode: 'foreground' }),
             content: '', attachments: [], reasoning_text: null, generation_state: 'streaming', ...createForegroundGenerationLease(requestId) },
     }, { replace: sendMessagesParams.retryReplacement, onCommitted: (user, assistant) => {
+        if (sendMessagesParams.retryReplacement && requestScope.ownsView()) {
+            const replaced = new Set(sendMessagesParams.retryReplacement.map(row => row.id));
+            rawMessages.value = rawMessages.value.filter(row => !row.id || !replaced.has(row.id));
+            messages.value = messages.value.filter(row => !replaced.has(row.id));
+        }
         requestScope.userMessageId = user.id;
         requestScope.assistantMessageId = assistant.id;
         requestScope.assistantRecord = assistant as StoredMessage;

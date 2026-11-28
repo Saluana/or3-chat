@@ -40,6 +40,13 @@ export function normalizeProviderRequestUsage(value: unknown): ProviderRequestUs
         ...(validCounter(reasoning) ? { reasoning_tokens: reasoning } : {}) };
 }
 
+export type AiCompletionNotice = 'output_limit' | 'provider_refused' | 'provider_incomplete';
+
+/** Read a provider completion notice from the persisted message or job error field. */
+export function readAiCompletionNotice(value: unknown): AiCompletionNotice | undefined {
+    if (value === 'output_limit' || value === 'provider_refused' || value === 'provider_incomplete') return value;
+}
+
 export type AiEvent =
     | { type: 'provider_state'; items: Record<string, unknown>[] }
     | { type: 'usage'; usage: ProviderRequestUsage; requestUsage?: RequestUsage }
@@ -50,4 +57,4 @@ export type AiEvent =
           type: 'tool_call';
           tool_call: ToolCall;
       }
-    | { type: 'done'; truncated?: true; refused?: true };
+    | { type: 'done'; notice?: AiCompletionNotice; truncated?: true; refused?: true };

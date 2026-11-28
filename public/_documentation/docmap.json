@@ -23,7 +23,7 @@
                     "category": "Start here",
                     "categoryOrder": 0,
                     "order": 1,
-                    "summary": "Connect OpenRouter, choose a model through chat settings or desktop favorites, inspect settings while streaming, send a message, set the default-off per-chat tool switch and dashboard tool default, pin chats and documents on Home, and understand draft and system-prompt recovery and saved work."
+                    "summary": "Connect OpenRouter, choose a model for each chat through settings or desktop favorites, inspect settings while streaming, send a message, set the default-off per-chat tool switch and dashboard tool default, pin chats and documents on Home, and understand draft and system-prompt recovery and saved work."
                 },
                 {
                     "name": "command-palette.md",
@@ -467,7 +467,7 @@
                     "category": "Reference",
                     "categoryOrder": 1,
                     "order": 0,
-                    "summary": "Shared message and event types, compatible chat imports, durable send results, web search, and tools with chat preference authorization."
+                    "summary": "Shared message and event types, compatible chat imports, provider completion notices, durable send results, web search, and tools with chat preference authorization."
                 },
                 {
                     "name": "database.md",
@@ -629,7 +629,7 @@
                     "category": "Using Cloud",
                     "categoryOrder": 1,
                     "order": 4,
-                    "summary": "Understand server-side jobs, browser and server requirements for delegated chats, retained tool results, incremental text and reasoning polling, and recovery after detachment."
+                    "summary": "Understand server-side jobs, browser and server requirements for delegated chats, retained tool results, incremental text and reasoning polling, output-limit continuation, and recovery after detachment."
                 },
                 {
                     "name": "notifications.md",
@@ -844,7 +844,7 @@
                     "category": "Advanced",
                     "categoryOrder": 5,
                     "order": 24,
-                    "summary": "Opt-in hosted billing with Free Local, Cloud trials, validated annual offers, safe Checkout retries, reconciliation health, account storage allowances and sync pause/resume."
+                    "summary": "Opt-in hosted billing with Free Local, Cloud trials, validated annual offers, safe Checkout retries, reconciliation health, owner-paid workspace sharing and storage allowances, and sync pause/resume."
                 }
             ]
         },
@@ -877,7 +877,7 @@
                     "category": "Architecture",
                     "categoryOrder": 0,
                     "order": 1,
-                    "summary": "Understand chat admission, persistence, direct OpenAI cache boundaries and live qualification, literal user-message editing, draft-safe pane plugin sends, streaming checkpoint failures and recovery, tab and pane navigation ownership, dashboard subpages preserved across unrelated URL updates, retired command handles, durable layouts, attachment resource cleanup, and local token estimates, streaming Markdown prefix reuse with custom images and tail-only repair, cached Mermaid remounts, worker highlighting, pre-paint scroll anchoring and collapse refill, and restoring a loading tab on refresh."
+                    "summary": "Understand chat admission, persistence, direct OpenAI cache boundaries and live qualification, in-place Edit and Save with reload protection, latest-turn Retry, output-limit continuation, synced answer selections and saved request recovery, draft-safe pane plugin sends, streaming checkpoint failures and recovery, tab and pane navigation ownership, dashboard subpages preserved across unrelated URL updates, retired command handles, durable layouts, attachment resource cleanup, and local token estimates, streaming Markdown prefix reuse with custom images and tail-only repair, cached Mermaid remounts, worker highlighting, pre-paint scroll anchoring and collapse refill, and restoring a loading tab on refresh."
                 },
                 {
                     "name": "ai-preferences.md",

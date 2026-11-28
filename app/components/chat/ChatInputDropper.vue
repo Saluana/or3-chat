@@ -396,6 +396,7 @@
                 v-if="modelCatalogActivated"
                 :is="$theme.activeComponents.value['model-catalog-modal']"
                 v-model:showModal="showModelCatalog"
+                @select="selectedModel = $event"
             />
             <OpenRouterKeyModal v-if="keyModalActivated" v-model:open="showKeyModal" />
         </ClientOnly>
@@ -669,6 +670,7 @@ async function initializeEditor(replaceExisting = false) {
             editorProps: {
                 attributes: {
                     'aria-label': 'Message input',
+                    'aria-multiline': 'true',
                     role: 'textbox',
                 },
                 // ProseMirror ignores preventDefault on paste; returning true is
@@ -786,7 +788,7 @@ const chatSettingsSurfaceProps = computed(() => isMobile.value ? {
     },
     ui: {
         overlay: 'bg-black/40',
-        content: 'chat-settings-sheet divide-y-0 max-h-[min(88dvh,720px)] overflow-hidden rounded-t-[var(--md-border-radius-large,24px)] bg-[color:var(--md-surface)] pb-[env(safe-area-inset-bottom)]',
+        content: 'chat-settings-sheet divide-y-0 h-[min(88svh,720px)] overflow-hidden rounded-t-[var(--md-border-radius-large,24px)] bg-[color:var(--md-surface)] pb-[env(safe-area-inset-bottom)]',
     },
     'onAfter:leave': resetChatSettingsDrag,
 } : {

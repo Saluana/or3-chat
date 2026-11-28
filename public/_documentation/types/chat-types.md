@@ -76,7 +76,9 @@ Portable plugin tool definitions belong to [SDK contracts](/documentation/plugin
 `AiEvent` is owned by `~~/shared/ai/events`; the existing `ORStreamEvent` import
 from `~~/shared/openrouter/parseOpenRouterSSE` remains an alias. Its variants
 are usage, text, image, reasoning, tool_call, and done. Narrow by `type`; image
-events can include a final flag and index. The parser reports provider/protocol
-failures through its error path, not an “error” union member.
+events can include a final flag and index. A done event can carry a
+`notice` of `output_limit`, `provider_refused`, or `provider_incomplete`.
+Existing consumers can still read the `truncated` and `refused` flags. Provider
+and protocol failures are reported through the parser's error path.
 
 Use these exported types so additions cause useful TypeScript errors in exhaustive consumers rather than drifting copied declarations.

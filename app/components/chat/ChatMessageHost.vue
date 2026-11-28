@@ -4,7 +4,9 @@
         v-bind="$attrs"
         :message="message"
         :thread-id="threadId"
+        :can-retry="canRetry"
         :retry-disabled="retryDisabled"
+        :revision-disabled="revisionDisabled"
         :compaction-action="compactionAction"
         :history-retrieval-available="historyRetrievalAvailable"
         @view-compaction-source="viewCompactionSource"
@@ -38,7 +40,9 @@ const props = defineProps<{
     renderer: Component;
     message: UiChatMessage;
     threadId?: string;
+    canRetry: boolean;
     retryDisabled: boolean;
+    revisionDisabled: boolean;
     compactionAction: { start: (anchorMessageId?: string) => Promise<void>; blockedReason?: string };
     historyRetrievalAvailable: boolean;
     onViewCompactionSource: (message: UiChatMessage, target: CompactionSourceTarget) => void;

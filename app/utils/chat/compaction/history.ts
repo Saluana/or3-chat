@@ -1,7 +1,7 @@
 import { getDb, type Or3DB } from '~/db/client';
 import type { Message, Thread } from '~/db/schema';
 import { compareMessageOrder } from '~/db/messages';
-import { withoutSupersededMessages } from '../transcript';
+import { projectAnswerVersionRows } from '../answer-revisions';
 import { readCompactionData } from '~~/shared/chat/compaction';
 import { resolveChatProject, projectSettingsId } from '~/db/project-workspace';
 import { readProjectSettings } from '~~/shared/projects/workspace';
@@ -143,7 +143,7 @@ export async function resolveThreadProjection(threadId: string, db: Or3DB = getD
             if (cutoff && (!rows.some((row) => row.id === cutoff!.id && !row.deleted) || cutoff.thread_id !== id)) {
                 throw new CompactionHistoryError('invalid_anchor', 'The reference anchor is unavailable.');
             }
-            let visible = withoutSupersededMessages(rows.filter((row) => !row.deleted && (!cutoff || compareMessageOrder(row, cutoff) <= 0)));
+            let visible = projectAnswerVersionRows(rows, cutoff);
             if (thread.branch_mode === 'compacted') {
                 const summary = assertCompactedSummary(thread, rows);
                 await assertSummaryProvenance(summary);

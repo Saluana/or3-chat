@@ -781,6 +781,7 @@ export async function consumeBackgroundStream(params: {
             {
                 status: 'complete',
                 content: fullContent,
+                error: normalizedState.completionNotice,
                 usage: requestUsage,
                 reasoning: fullReasoning,
                 completedAt,
@@ -791,6 +792,7 @@ export async function consumeBackgroundStream(params: {
         emitJobStatus(params.jobId, 'complete', {
             attempt,
             content: fullContent,
+            error: normalizedState.completionNotice,
             usage: requestUsage,
             contentLength: fullContent.length,
             reasoning: fullReasoning,
@@ -1658,6 +1660,7 @@ export async function consumeBackgroundStreamWithTools(params: {
             {
                 status: 'complete',
                 content: fullContent,
+                error: normalizedState.completionNotice,
                 usage: requestUsage,
                 reasoning: fullReasoning,
                 toolCalls: Array.from(toolStates.values()),
@@ -1678,6 +1681,7 @@ export async function consumeBackgroundStreamWithTools(params: {
         emitJobStatus(params.jobId, 'complete', {
             attempt,
             content: fullContent,
+            error: normalizedState.completionNotice,
             usage: requestUsage,
             contentLength: fullContent.length,
             reasoning: fullReasoning,

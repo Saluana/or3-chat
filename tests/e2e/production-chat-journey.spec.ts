@@ -1533,6 +1533,7 @@ test('compaction media meter estimates inherited historical image cost without a
 });
 test('PageShell compaction families retain keyboard expansion and child-only search across sidebar consumers', async ({ page }, info) => {
     test.setTimeout(120_000);
+    await page.addInitScript(() => localStorage.setItem('openrouter_model_catalog_v1', JSON.stringify({ data: [{ id: 'scripted-no-tools', name: 'Scripted model without tools', context_length: 32768, supported_parameters: [], architecture: { input_modalities: ['text'], output_modalities: ['text'] } }], fetchedAt: Date.now() })));
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.route('**openrouter.ai/**', (route) => route.abort());
     await page.goto(`${chatPage}?compaction=1&presentation=1&native=1`);
@@ -1645,7 +1646,9 @@ test('PageShell compaction families retain keyboard expansion and child-only sea
     await expect(page.locator(`[data-msg-id="${root}-anchor"]`)).toHaveCount(0);
     await expect.poll(() => compactionSummaryId(page), { timeout: COMPACTION_NAVIGATION_TIMEOUT }).toBe(historySummaryId);
     const requestsBeforeManualNavigation = await page.evaluate(() => localStorage.getItem('or3:e2e:compaction-requests'));
-    await page.evaluate(() => window.dispatchEvent(new CustomEvent('or3:model-selected', { detail: { modelId: 'scripted-no-tools' } })));
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await page.getByRole('button', { name: /^Model catalog/ }).click();
+    await page.getByRole('dialog', { name: 'Model catalog', exact: true }).locator('[data-model-id="scripted-no-tools"]').getByRole('button', { name: 'Use model', exact: true }).click();
     const noToolsCard = page.locator('[data-compaction-card]');
     await noToolsCard.locator('summary').click();
     await expect(noToolsCard.getByText(/The AI cannot look up earlier messages with the current settings/)).toBeVisible();
@@ -1828,6 +1831,7 @@ test.afterEach(async ({ page }, info) => {
 
 test('native context recovery retains saved identities after reload', async ({ page }, info) => {
     test.setTimeout(120_000);
+    await page.addInitScript(() => localStorage.setItem('openrouter_model_catalog_v1', JSON.stringify({ data: [{ id: 'context-fixture-large', name: 'context-fixture-large', context_length: 1000000, supported_parameters: ['tools'], architecture: { input_modalities: ['text'], output_modalities: ['text'] } }], fetchedAt: Date.now() })));
     await page.route('**openrouter.ai/**', (route) => route.abort());
     await page.goto(`${chatPage}?context=1`);
     const input = page.getByRole('textbox', { name: 'Message input' });
@@ -1864,7 +1868,9 @@ test('native context recovery retains saved identities after reload', async ({ p
     expect(assistant.pending).toBe(false); expect(assistant.data.turn_id).toBe(savedUser.id);
     expect(failed.checkpoints[0]).toMatchObject({ user_message_id: savedUser.id, assistant_message_id: assistant.id });
     await page.reload(); await expect(input).toBeVisible();
-    await page.evaluate(() => window.dispatchEvent(new CustomEvent('or3:model-selected', { detail: { modelId: 'context-fixture-large' } })));
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await page.getByRole('button', { name: /^Model catalog/ }).click();
+    await page.getByRole('dialog', { name: 'Model catalog', exact: true }).locator('[data-model-id="context-fixture-large"]').getByRole('button', { name: 'Use model', exact: true }).click();
     const retry = page.getByRole('button', { name: 'Retry message', exact: true }).last(); await expect(retry).toBeVisible(); await retry.click();
     await expect.poll(async () => (await readAttempt()).rows.find((row) => row.id === assistant.id)?.data.content).toBe('Hello from deterministic stream.');
     const recovered = await readAttempt(); expect(recovered.checkpoints).toHaveLength(0);
@@ -2236,7 +2242,7 @@ test('Files stores active content as download-only bytes without rendering it', 
     }
 });
 
-async function openChat(page: Page): Promise<void> {
+async function openChat(page: Page, query = ''): Promise<void> {
     await page.context().route('**/*', route => new URL(route.request().url()).hostname === '127.0.0.1'
         ? route.continue() : route.abort('blockedbyclient'));
     // Catalog loading can start before the fixture component mounts and
@@ -2244,7 +2250,7 @@ async function openChat(page: Page): Promise<void> {
     await page.route('**/api/__or3-e2e/models*', (route) =>
         route.fulfill({ json: { data: [], links: { next: null }, total_count: 0 } })
     );
-    await page.goto(chatPage);
+    await page.goto(chatPage + query);
     await expect(page.getByTestId('production-chat-journey')).toBeVisible({
         timeout: 30_000,
     });
@@ -2297,7 +2303,220 @@ async function waitForDurableReply(page: Page, content: string): Promise<void> {
     }, { threadId, content }), { timeout: 5_000 }).toBe(true);
 }
 
+function turnRow(page: Page, text: string) {
+    return page.locator('[data-msg-id]').filter({ has: page.getByText(text, { exact: true }) });
+}
+
+function turnRequests(page: Page): Promise<Array<Array<{ role: string; text: string }>>> {
+    return page.evaluate(() => JSON.parse(localStorage.getItem('or3:e2e:turn-requests') ?? '[]'));
+}
+
+async function editTurn(page: Page, oldText: string, newText: string, action = 'Save') {
+    const row = turnRow(page, oldText);
+    await row.getByRole('button', { name: 'Edit message', exact: true }).click();
+    // The original text leaves the DOM while editing.
+    const editor = page.locator('.cm-editor-actions').locator('..');
+    await editor.locator('[contenteditable="true"]').fill(newText);
+    await editor.getByRole('button', { name: action, exact: true }).click();
+}
+
 test.describe('production chat journey', () => {
+    test('latest-turn actions preserve three turns and send edited history on the next send', async ({ page }, info) => {
+        test.setTimeout(120_000);
+        await page.setViewportSize({ width: 1280, height: 1200 });
+        await openChat(page, '?turns=1');
+        const prompts = ['First turn', 'Second turn', 'Third turn'];
+        for (const prompt of prompts) {
+            await send(page, prompt);
+            await expect(turnRow(page, 'Reply to ' + prompt)).toBeVisible();
+        }
+        const retry = { name: 'Retry message', exact: true };
+        await expect(page.getByRole('button', retry)).toHaveCount(1);
+        await expect(turnRow(page, 'Reply to Third turn').getByRole('button', retry)).toBeVisible();
+        await expect(turnRow(page, 'Reply to First turn').getByRole('button', { name: 'Branch conversation' })).toBeVisible();
+
+        const edited = page.getByText('Edited', { exact: true });
+        await editTurn(page, prompts[0]!, 'Discarded correction', 'Cancel');
+        await editTurn(page, prompts[0]!, prompts[0]!);
+        await expect(edited).toHaveCount(0);
+        expect(await turnRequests(page)).toHaveLength(3);
+        const corrected = 'First turn corrected';
+        await editTurn(page, prompts[0]!, corrected);
+        await expect(turnRow(page, corrected).getByText('Edited', { exact: true })).toBeVisible();
+        await editTurn(page, 'Reply to First turn', 'Corrected first reply');
+        await expect(turnRow(page, 'Corrected first reply').getByText('Edited', { exact: true })).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeVisible();
+        expect(await turnRequests(page)).toHaveLength(3);
+
+        await page.reload();
+        await expect(edited).toHaveCount(2);
+        const expected = [corrected, 'Corrected first reply', 'Second turn', 'Reply to Second turn', 'Third turn', 'Reply to Third turn'];
+        const rows = page.locator('[data-msg-id]');
+        await expect(rows).toHaveCount(expected.length);
+        for (const [index, text] of expected.entries()) await expect(rows.nth(index).getByText(text, { exact: true })).toBeVisible();
+        await send(page, 'Fourth turn');
+        await expect(turnRow(page, 'Reply to Fourth turn')).toBeVisible();
+        const requests = await turnRequests(page);
+        expect(requests).toHaveLength(4);
+        expect(requests.at(-1)?.filter(message => message.role !== 'system').map(message => message.text)).toEqual([...expected, 'Fourth turn']);
+        await info.attach('edited-history-request', { contentType: 'application/json', body: JSON.stringify(requests.at(-1)) });
+    });
+
+    test('answer revisions keep the selected reply and all versions after reload', async ({ page }, info) => {
+        test.setTimeout(120_000);
+        await page.setViewportSize({ width: 1280, height: 1100 });
+        await page.context().addCookies([{ name: 'or3_active_theme', value: 'blank', domain: '127.0.0.1', path: '/' }]);
+        await page.addInitScript(() => localStorage.setItem('activeTheme', 'blank'));
+        await openChat(page, '?turns=1&revisions=1');
+        await expect(page.locator('html')).toHaveAttribute('data-theme', 'blank');
+        await send(page, 'Earlier prompt');
+        const prompt = 'Compare answer versions';
+        const reply = (version: number) => 'Reply to ' + prompt + ' — version ' + version;
+        const retry = page.getByRole('button', { name: 'Retry message', exact: true });
+        const previous = page.getByRole('button', { name: 'Previous answer version', exact: true });
+        const next = page.getByRole('button', { name: 'Next answer version', exact: true });
+        await send(page, prompt);
+        await expect(turnRow(page, reply(1))).toBeVisible();
+        await retry.click();
+        await expect(turnRow(page, reply(2))).toBeVisible();
+        await expect(next).toBeDisabled();
+        await previous.click();
+        await expect(turnRow(page, reply(1))).toBeVisible();
+        await expect(previous).toBeDisabled();
+        expect(await turnRequests(page)).toHaveLength(3);
+
+        // Retrying from an older selection appends a third version.
+        await retry.click();
+        await expect(turnRow(page, reply(3))).toBeVisible();
+        await previous.click();
+        await expect(turnRow(page, reply(2))).toBeVisible();
+        await page.reload();
+        await expect(turnRow(page, reply(2))).toBeVisible();
+        await expect(turnRow(page, prompt)).toHaveCount(1);
+        await expect(turnRow(page, 'Reply to Earlier prompt — version 1')).toBeVisible();
+        await previous.click();
+        await expect(turnRow(page, reply(1))).toBeVisible();
+        await next.click();
+        await next.click();
+        await expect(turnRow(page, reply(3))).toBeVisible();
+        await previous.click();
+        await expect(turnRow(page, reply(2))).toBeVisible();
+        expect(await turnRequests(page)).toHaveLength(4);
+
+        const pager = page.getByRole('group', { name: 'Answer versions', exact: true });
+        const count = pager.getByText('2 / 3', { exact: true });
+        const answerRow = turnRow(page, reply(2));
+        const branchButton = answerRow.getByRole('button', { name: 'Branch conversation' });
+        for (const width of [390, 1280]) {
+            await page.setViewportSize({ width, height: 1100 });
+            await expect(count).toBeVisible();
+            await expect.poll(() => count.evaluate(label => {
+                const range = document.createRange();
+                range.selectNodeContents(label);
+                return range.getClientRects().length;
+            })).toBe(1);
+            const bounds = (await pager.boundingBox())!;
+            const left = (await previous.boundingBox())!;
+            const right = (await next.boundingBox())!;
+            const label = (await count.boundingBox())!;
+            const branch = (await branchButton.boundingBox())!;
+            expect(left.x + left.width).toBeLessThanOrEqual(label.x);
+            expect(label.x + label.width).toBeLessThanOrEqual(right.x);
+            expect(bounds.x + bounds.width).toBeLessThanOrEqual(width);
+            expect(branch.x + branch.width <= bounds.x || branch.y + branch.height <= bounds.y).toBe(true);
+            const branchBackground = () => branchButton.evaluate(async button => {
+                await Promise.allSettled(button.getAnimations().map(animation => animation.finished));
+                return getComputedStyle(button).backgroundColor;
+            });
+            await page.mouse.move(0, 0);
+            const idleBackground = await branchBackground();
+            await branchButton.hover();
+            await expect.poll(branchBackground).not.toBe(idleBackground);
+            const actionHover = await branchBackground();
+            await previous.hover();
+            await expect(previous).toHaveCSS('background-color', actionHover);
+            expect({ width: left.width, height: left.height }).toEqual({ width: branch.width, height: branch.height });
+            await info.attach(`revision-controls-${width}`, { body: await answerRow.screenshot(), contentType: 'image/png' });
+        }
+
+        await send(page, 'Follow up on the selected answer');
+        await expect(turnRow(page, 'Reply to Follow up on the selected answer — version 1')).toBeVisible();
+        const requests = await turnRequests(page);
+        expect(requests).toHaveLength(5);
+        expect(requests.at(-1)?.filter(message => message.role === 'assistant').map(message => message.text))
+            .toEqual(['Reply to Earlier prompt — version 1', reply(2)]);
+        await page.reload();
+        await expect(turnRow(page, reply(2))).toBeVisible();
+        await expect(next).toBeEnabled();
+        await expect(retry).toHaveCount(1);
+        await info.attach('selected-answer-context', { contentType: 'application/json', body: JSON.stringify(requests.at(-1)) });
+    });
+
+    test('editing a failed prompt replaces only its obsolete saved request on explicit Retry', async ({ page }, info) => {
+        test.setTimeout(120_000);
+        await openChat(page, '?turns=1&context=1&holdEdit=1');
+        const initial = 'journey:context-reject before correction';
+        const corrected = 'Corrected failed prompt';
+        await send(page, initial);
+        const failed = page.getByRole('alert', { name: 'Response failed', exact: true });
+        await expect(failed).toBeVisible();
+        await editTurn(page, initial, corrected);
+        await expect(page.getByTestId('production-chat-journey')).toHaveAttribute('data-edit-held', 'true');
+        const dialogs: string[] = [];
+        page.on('dialog', async dialog => { dialogs.push(dialog.type()); await dialog.dismiss(); });
+        await page.evaluate(() => setTimeout(() => location.reload(), 0));
+        await expect.poll(() => dialogs).toEqual(['beforeunload']);
+        await expect(page.locator('.cm-editor-actions').locator('..').locator('[contenteditable="true"]')).toHaveText(corrected);
+        await page.evaluate(() => window.dispatchEvent(new Event('or3:e2e:release-edit')));
+        // The editor itself also displays the corrected text before the write commits.
+        await expect(turnRow(page, corrected).getByText('Edited', { exact: true })).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeVisible();
+        expect(await turnRequests(page)).toHaveLength(1);
+
+        await page.reload();
+        await expect(turnRow(page, corrected).getByText('Edited', { exact: true })).toBeVisible();
+        const retry = page.getByRole('button', { name: 'Retry message', exact: true });
+        await expect(retry).toHaveCount(1);
+        await retry.click();
+        await expect(turnRow(page, 'Reply to ' + corrected)).toBeVisible();
+        const requests = await turnRequests(page);
+        expect(requests).toHaveLength(2);
+        expect(requests[1]?.filter(message => message.role === 'user').map(message => message.text)).toEqual([corrected]);
+        await expect(turnRow(page, initial)).toHaveCount(0);
+        await expect(failed).toHaveCount(0);
+        expect(dialogs).toEqual(['beforeunload']);
+        await info.attach('corrected-retry-request', { contentType: 'application/json', body: JSON.stringify(requests[1]) });
+    });
+
+    test('a retry waiting in one pane expires when another pane sends a newer turn', async ({ page, context }, info) => {
+        test.setTimeout(120_000);
+        await openChat(page, '?turns=1&holdRetry=1');
+        await send(page, 'Previously latest turn');
+        await expect(turnRow(page, 'Reply to Previously latest turn')).toBeVisible();
+        const peer = await context.newPage();
+        try {
+            await openChat(peer, '?turns=1');
+            await expect(turnRow(peer, 'Reply to Previously latest turn')).toBeVisible();
+            const retry = { name: 'Retry message', exact: true };
+            await turnRow(page, 'Reply to Previously latest turn').getByRole('button', retry).click();
+            await expect(page.getByTestId('production-chat-journey')).toHaveAttribute('data-retry-held', 'true');
+            await send(peer, 'New turn from another pane');
+            await expect(turnRow(peer, 'Reply to New turn from another pane')).toBeVisible();
+            await waitForDurableReply(peer, 'Reply to New turn from another pane');
+            await page.evaluate(() => window.dispatchEvent(new Event('or3:e2e:release-retry')));
+            await expect(page.getByText('Retry did not start', { exact: true })).toBeVisible();
+            await expect(turnRow(page, 'Reply to Previously latest turn')).toBeVisible();
+            const requests = await turnRequests(page);
+            expect(requests).toHaveLength(2);
+            await page.reload();
+            await expect(turnRow(page, 'Reply to Previously latest turn')).toBeVisible();
+            await expect(turnRow(page, 'Reply to New turn from another pane').getByRole('button', retry)).toBeVisible();
+            await info.attach('stale-retry-requests', { contentType: 'application/json', body: JSON.stringify(requests) });
+        } finally {
+            await peer.close();
+        }
+    });
+
     test('chat keeps literal LaTeX in code while rendering prose math after reload', async ({ page }, info) => {
         test.setTimeout(120_000);
         await openChat(page);
@@ -2841,6 +3060,56 @@ test.describe('production chat journey', () => {
         await page.reload();
         await expect(page.getByText('Partial response before stop.')).toBeVisible();
     });
+    test('continues a provider-capped reply in place after reload', async ({ page }, info) => {
+        test.setTimeout(120_000);
+        await openChat(page, '?turns=1');
+        await send(page, 'journey:output-cap');
+        const cutoff = page.getByRole('status').filter({ hasText: 'Output limit reached' });
+        const continueButton = page.getByRole('button', { name: 'Continue generation', exact: true });
+        const firstReply = turnRow(page, 'The trip started');
+        await expect(firstReply).toBeVisible();
+        const firstNotice = firstReply.getByRole('status').filter({ hasText: 'Output limit reached' });
+        await expect(firstNotice).toBeVisible();
+        const textBox = (await firstReply.getByText('The trip started', { exact: true }).boundingBox())!;
+        const noticeBox = (await firstNotice.boundingBox())!;
+        const continueBox = (await continueButton.boundingBox())!;
+        expect(noticeBox.y).toBeGreaterThanOrEqual(textBox.y + textBox.height);
+        expect(continueBox.y).toBeGreaterThanOrEqual(noticeBox.y + noticeBox.height);
+        const replyId = await firstReply.getAttribute('data-msg-id');
+        expect(replyId).toBeTruthy();
+
+        await page.reload();
+        await expect(firstReply).toHaveAttribute('data-msg-id', replyId!);
+        await continueButton.click();
+        const extendedReply = turnRow(page, 'The trip started by train and ordered');
+        await expect(extendedReply.getByRole('status').filter({ hasText: 'Output limit reached' })).toBeVisible();
+        await expect(extendedReply).toHaveAttribute('data-msg-id', replyId!);
+
+        await page.reload();
+        await continueButton.click();
+        const finishedReply = turnRow(page, 'The trip started by train and ordered dinner.');
+        await expect(finishedReply).toHaveAttribute('data-msg-id', replyId!);
+        await expect(page.getByRole('button', { name: 'Send message' })).toBeVisible();
+        await expect(continueButton).toHaveCount(0);
+        await expect(cutoff).toHaveCount(0);
+        await page.reload();
+        await expect(finishedReply).toHaveAttribute('data-msg-id', replyId!);
+        await expect(cutoff).toHaveCount(0);
+
+        await send(page, 'journey:output-cap empty');
+        await expect(cutoff).toHaveCount(1);
+        await expect(continueButton).toHaveCount(0);
+        await send(page, 'journey:output-cap filtered');
+        const filteredReply = turnRow(page, 'The provider filtered this reply.');
+        await expect(filteredReply.getByRole('status').filter({ hasText: 'provider refused or filtered' })).toBeVisible();
+        await expect(continueButton).toHaveCount(0);
+        await page.reload();
+        await expect(filteredReply.getByRole('status').filter({ hasText: 'provider refused or filtered' })).toBeVisible();
+        await expect(continueButton).toHaveCount(0);
+        await info.attach('output-limit-requests', { contentType: 'application/json',
+            body: JSON.stringify((await turnRequests(page)).map(request => request.filter(message => message.role === 'assistant'))) });
+    });
+
     test('recovers a partial foreground response after refresh during streaming', async ({ page }) => {
         test.setTimeout(120_000);
         await openChat(page);
@@ -3176,8 +3445,9 @@ test.describe('production chat journey', () => {
         await info.attach('failed-response', { path: shot, contentType: 'image/png' });
         await page.reload();
         await expect(failedResponse).toBeVisible();
-        const retry = page.getByRole('button', { name: 'Retry message', exact: true }).last();
-        await expect(retry).toBeVisible();
+        const retry = page.getByRole('button', { name: 'Retry message', exact: true });
+        await expect(retry).toHaveCount(1);
+        await expect(page.locator('[data-msg-id]').filter({ has: failedResponse }).getByRole('button', { name: 'Retry message', exact: true })).toBeVisible();
         await retry.click();
 
         await expect(page.getByText('Recovered after retry.')).toBeVisible();
@@ -3416,6 +3686,47 @@ test('Files review regressions preserve preview identity, native images, project
     await info.attach('review-files-preview', { path, contentType: 'image/png' });
 });
 
+
+test('catalog selection stays with its chat across split panes and reload', async ({ page }, info) => {
+    const models = ['pane-first', 'pane-second'].map(id => ({ id, name: id, created: 1, context_length: 32000,
+        supported_parameters: ['tools'], architecture: { input_modalities: ['text'], output_modalities: ['text'] }, pricing: { prompt: '0', completion: '0' } }));
+    await page.addInitScript(models => localStorage.setItem('openrouter_model_catalog_v1', JSON.stringify({ data: models, fetchedAt: Date.now() })), models);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`${chatPage}?workspace=1`);
+    const panes = page.locator('.chat-container-root:visible');
+    const choose = async (index: number, id: string) => {
+        await panes.nth(index).getByRole('button', { name: 'Settings', exact: true }).click();
+        await page.getByRole('button', { name: /^Model catalog/ }).click();
+        const catalog = page.getByRole('dialog', { name: 'Model catalog', exact: true });
+        await catalog.locator(`[data-model-id="${id}"]`).getByRole('button', { name: 'Use model', exact: true }).click();
+    };
+    const send = async (index: number, text: string) => {
+        await panes.nth(index).getByRole('textbox', { name: 'Message input' }).fill(text);
+        await panes.nth(index).getByRole('button', { name: 'Send message', exact: true }).click();
+        await expect(panes.nth(index).getByText(text, { exact: true })).toBeVisible();
+    };
+    await expect(panes).toHaveCount(1);
+    await choose(0, 'pane-first');
+    await send(0, 'First pane message');
+    await page.getByRole('button', { name: 'New split', exact: true }).click();
+    await expect(panes).toHaveCount(2);
+    await send(1, 'Second pane message');
+    await choose(1, 'pane-second');
+    const savedChoices = () => page.evaluate(async () => {
+        const name = (await indexedDB.databases()).find(entry => entry.name?.startsWith('or3-db'))?.name;
+        if (!name) return [];
+        const db = await new Promise<IDBDatabase>((resolve, reject) => { const request = indexedDB.open(name); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
+        const rows = await new Promise<Array<{ name: string; value: string }>>((resolve, reject) => { const request = db.transaction('current_kv').objectStore('current_kv').getAll(); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
+        db.close();
+        return rows.filter(row => row.name.startsWith('chat-model:')).map(row => JSON.parse(row.value).model).sort();
+    });
+    await expect.poll(savedChoices).toEqual(['pane-first', 'pane-second']);
+    await page.reload();
+    await expect(panes).toHaveCount(2);
+    await expect.poll(savedChoices).toEqual(['pane-first', 'pane-second']);
+    await page.screenshot({ path: info.outputPath('independent-chat-models.png'), animations: 'disabled' });
+    await info.attach('independent-chat-models', { path: info.outputPath('independent-chat-models.png'), contentType: 'image/png' });
+});
 
 test('catalog keeps platform identity, honest prices, recent choices and mobile selection', async ({ page }, info) => {
     const models = [

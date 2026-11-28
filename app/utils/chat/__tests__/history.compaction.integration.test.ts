@@ -1,12 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import Dexie from 'dexie';
 import { ref } from 'vue';
-import { getDb, setActiveWorkspaceDb, evictWorkspaceDb } from '~/db/client';
+import { getDb, Or3DB, setActiveWorkspaceDb, evictWorkspaceDb } from '~/db/client';
 import type { Thread, Message } from '~/db/schema';
 import type { ChatMessage } from '../types';
 import { ensureThreadHistoryLoaded } from '../history';
 import { ensureUiMessage } from '../uiMessages';
-import { buildContext } from '~/db/branching';
+import { buildContext, forkThread } from '~/db/branching';
+import { selectAnswerVersion } from '~/db/answer-revisions';
+import { latestRetryUser } from '~/db/messages';
+import { ConflictResolver } from '~/core/sync/conflict-resolver';
+import { captureWorkspaceOperation } from '../workspace-access';
 import { createHookEngine } from '~/core/hooks/hooks';
 import { createTypedHookEngine } from '~/core/hooks/typed-hooks';
 import { setHookEngine } from '~/core/hooks/useHooks';
@@ -48,6 +52,59 @@ async function loaded(id: string) {
 }
 
 describe('canonical lineage history and summary readiness', () => {
+    it('converges on one answer after two offline selections and keeps all choices available', async () => {
+        const db = getDb();
+        const peer = new Or3DB(`answer-versions-${crypto.randomUUID()}`);
+        const scope = captureWorkspaceOperation({ workspaceId: workspace, threadId: 'root', subject: null,
+            messageId: 'u1', callId: 'answer-version', requestId: 'answer-version', abortSignal: new AbortController().signal });
+        try {
+            await thread('root');
+            for (const version of [1, 2, 3]) {
+                const user = `u${version}`;
+                const assistant = `a${version}`;
+                const archived = version === 1 ? {} : { superseded_by: 'u1' };
+                const revision = { answer_revision_group: 'u1', answer_revision_id: user };
+                await message(user, 'root', version * 10, { data: { ...archived, ...revision, content: 'Prompt' } });
+                await message(assistant, 'root', version * 10 + 1, { role: 'assistant', data: {
+                    ...archived, ...revision, content: `Answer ${version}`, parent_turn_id: user,
+                    tool_calls: [{ id: 'lookup', name: 'lookup', args: '{}', status: 'complete' }],
+                } });
+                await message(`tool${version}`, 'root', version * 10 + 2, { role: 'tool', data: {
+                    ...archived, ...(version === 1 ? revision : {}), content: `Result ${version}`,
+                    parent_assistant_id: assistant, tool_call_id: 'lookup', tool_name: 'lookup',
+                } });
+            }
+            await peer.threads.put((await db.threads.get('root'))!);
+            await peer.messages.bulkPut(await db.messages.toArray());
+            expect(await selectAnswerVersion({ ...scope, db: peer }, 'root', 'u1', 'u2')).toBe(true);
+            expect(await selectAnswerVersion(scope, 'root', 'u1', 'u3')).toBe(true);
+            const changes = async (source: Or3DB) => (await source.messages.toArray())
+                .filter(row => row.clock > 1)
+                .map((row, index) => ({ serverVersion: index + 1, tableName: 'messages' as const, pk: row.id,
+                    op: 'put' as const, payload: row, stamp: {
+                        clock: row.clock, hlc: row.hlc!, deviceId: source.name, opId: crypto.randomUUID(),
+                    } }));
+            const [localChanges, peerChanges] = await Promise.all([changes(db), changes(peer)]);
+            await new ConflictResolver(db).applyChanges(peerChanges);
+            await new ConflictResolver(peer).applyChanges(localChanges);
+            for (const replica of [db, peer]) expect((await latestRetryUser(replica, 'root'))?.id).toBe('u3');
+            const visible = async () => (await loaded('root')).rows.map(row => row.id);
+            expect(await visible()).toEqual(['u3', 'a3', 'tool3']);
+            expect((await buildContext({ threadId: 'root' })).map(row => row.id)).toEqual(['u3', 'a3', 'tool3']);
+            const branch = await forkThread({ sourceThreadId: 'root', anchorMessageId: 'a3', mode: 'reference' });
+            await expect(forkThread({ sourceThreadId: 'root', anchorMessageId: 'a2', mode: 'reference' })).rejects.toThrow('Invalid anchor');
+
+            expect(await selectAnswerVersion(scope, 'root', 'u3', 'u2')).toBe(true);
+            expect(await visible()).toEqual(['u2', 'a2', 'tool2']);
+            expect(await selectAnswerVersion(scope, 'root', 'u2', 'u1')).toBe(true);
+            expect(await visible()).toEqual(['u1', 'a1', 'tool1']);
+            expect((await latestRetryUser(db, 'root'))?.id).toBe('u1');
+            expect((await buildContext({ threadId: branch.thread.id })).map(row => row.id)).toEqual(['u3', 'a3']);
+        } finally {
+            await peer.delete();
+        }
+    });
+
     // Moving a reference or compacted branch must revoke foreign ancestry at
     // both normal context and workspace-read boundaries. Existing
     // lineage cases are all ordinary chats and cannot detect project leakage.

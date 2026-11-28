@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AssistantPersister } from '../types';
 
+type ForegroundRun = ReturnType<typeof import('../foregroundStream').runForegroundStreamLoop>;
+
 const openRouterStreamMock = vi.fn();
 const appendToolResultMock = vi.hoisted(() =>
     vi.fn(async (..._args: unknown[]) => ({ id: 'tool-msg' }))
@@ -224,7 +226,7 @@ describe('runForegroundStreamLoop', () => {
         const finish = deferred<void>();
         const firstWrite = deferred<void>();
         const consumed = deferred<void>();
-        let run: Promise<void> | undefined;
+        let run: ForegroundRun | undefined;
         try {
             openRouterStreamMock.mockImplementation(async function* () {
                 yield { type, text: 'early' };
@@ -284,7 +286,7 @@ describe('runForegroundStreamLoop', () => {
     it.each([false, true])('bounds the suffix accepted during a slow progress write (failure=%s)', async (fails) => {
         const firstWrite = deferred<void>();
         const entered = deferred<void>();
-        let run: Promise<void> | undefined;
+        let run: ForegroundRun | undefined;
         let activeWrites = 0;
         let maximumWrites = 0;
         openRouterStreamMock.mockImplementation(async function* () {
@@ -344,7 +346,7 @@ describe('runForegroundStreamLoop', () => {
         const finish = deferred<void>();
         const firstWrite = deferred<void>();
         const providerClosed = deferred<void>();
-        let run: Promise<void> | undefined;
+        let run: ForegroundRun | undefined;
         try {
             openRouterStreamMock.mockImplementation(async function* () {
                 yield { type: 'text', text: 'early' };

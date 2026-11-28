@@ -56,7 +56,8 @@ vi.mock('~/db/client', () => ({
     getWorkspaceGeneration: () => 0,
 }));
 
-vi.mock('~/db/messages', () => ({
+vi.mock('~/db/messages', async (importOriginal) => ({
+    latestRetryUser: (await importOriginal<typeof import('~/db/messages')>()).latestRetryUser,
     // Admission races are exercised against real Dexie in the integration suite.
     patchMessageInDb: async (...args: unknown[]) => { await updateMessageRecordSpy(...args); return dbState.messagesGet(); },
     messagesByThread: (...args: unknown[]) => messagesByThreadSpy(...args),
@@ -193,15 +194,12 @@ describe('continue/retry regressions', () => {
         messagesByThreadSpy.mockResolvedValue(rows);
         const sendMessage = vi.fn();
         const hooks = { doAction: vi.fn() };
-        const rawMessages = ref([{ id: 'u1', role: 'user' as const, content: 'write once' }]);
-        const messages = ref([]);
-        const result = await retryMessageImpl({ loading: ref(false), threadIdRef: ref('t1'), tailAssistant: ref(null),
-            rawMessages, messages, hooks, sendMessage, defaultModelId: 'model', suppressNextTailFlush: vi.fn() }, 'a1');
+        const result = await retryMessageImpl({ loading: ref(false), threadIdRef: ref('t1'),
+            hooks, sendMessage, defaultModelId: 'model', replaceCanonicalHistory: vi.fn() }, 'a1');
         expect(result).toMatchObject({ status: 'rejected', reason: 'unavailable', error: expect.stringContaining('uncertain') });
         expect(sendMessage).not.toHaveBeenCalled();
         expect(hooks.doAction).not.toHaveBeenCalled();
         expect(updateMessageRecordSpy).not.toHaveBeenCalled();
-        expect(rawMessages.value).toHaveLength(1);
     });
     beforeEach(() => {
         reportErrorSpy.mockReset();
@@ -577,17 +575,25 @@ describe('continue/retry regressions', () => {
         expect(tailAssistant.value?.error).toBe('stream_interrupted');
     });
 
-    it('continue sends tool calls with their results, as OpenAI requires', async () => {
+    it('continues one selected answer with its tool calls and results', async () => {
         // Stopped mid-turn: one call finished (durable tool row), one never did.
+        const revision = { answer_revision_group: 'archived-u', answer_revision_id: 'u1',
+            answer_revision_selection: { clock: 2, hlc: 'selected', version_id: 'u1' } };
         const rows = [
-            { id: 'u1', role: 'user', thread_id: 't1', index: 1, content: 'Rate the chapters', data: { content: 'Rate the chapters' }, deleted: false, clock: 1 },
+            { id: 'u1', role: 'user', thread_id: 't1', index: 1, content: 'Rate the chapters', data: { ...revision, content: 'Rate the chapters' }, deleted: false, clock: 1 },
             { id: 'a1', role: 'assistant', thread_id: 't1', index: 2, content: 'Reading chapter one', deleted: false, clock: 1,
-                data: { content: 'Reading chapter one', tool_calls: [
+                data: { ...revision, content: 'Reading chapter one', tool_calls: [
                     { id: 'c1', name: 'workspace_read', args: '{"item":{"kind":"document","id":"d1"}}', status: 'complete', result: 'Chapter one text', text_offset: 19 },
                     { id: 'c2', name: 'workspace_read', args: '{"item":{"kind":"document","id":"d2"}}', status: 'loading' },
                 ] } },
             { id: 'r1', role: 'tool', thread_id: 't1', index: 3, content: 'Chapter one text', deleted: false, clock: 1,
                 data: { tool_call_id: 'c1', tool_name: 'workspace_read', parent_assistant_id: 'a1' } },
+            { id: 'archived-u', role: 'user', thread_id: 't1', index: -2, deleted: false, clock: 1, data: {
+                ...revision, answer_revision_id: 'archived-u', content: 'Rate the chapters',
+            } },
+            { id: 'archived-a', role: 'assistant', thread_id: 't1', index: -1, deleted: false, clock: 1, data: {
+                ...revision, answer_revision_id: 'archived-u', content: 'Discarded answer',
+            } },
         ];
         dbState.messagesGet.mockResolvedValue(rows[1]);
         dbState.where.mockReturnValue({ between: vi.fn().mockReturnThis(), filter: vi.fn().mockReturnThis(), toArray: vi.fn().mockResolvedValue(rows) });
@@ -608,6 +614,8 @@ describe('continue/retry regressions', () => {
         }, 'a1');
 
         const history = vi.mocked(buildOpenRouterMessagesForSend).mock.calls[0]![0].effectiveMessages;
+        expect(history.filter(row => row.role === 'assistant').map(row => row.id)).toEqual(['a1']);
+        expect(history.filter(row => row.role === 'user').map(row => row.id)).toEqual(['u1', expect.stringMatching(/^continue-/)]);
         const { encodeOpenAiRequest } = await import('~~/shared/openai/adapter');
         const { encodeOpenAiResponseRequest } = await import('~~/shared/openai/responses');
         const { input } = encodeOpenAiResponseRequest(encodeOpenAiRequest({ model: '@openai/gpt-5.4', messages: history })) as { input: Array<{ type?: string; call_id?: string }> };
@@ -843,19 +851,9 @@ describe('continue/retry regressions', () => {
             {
                 loading: ref(false),
                 threadIdRef: ref('t1'),
-                tailAssistant: ref(null),
-                rawMessages: ref([
-                    { id: 'u1', role: 'user', content: 'retry this' },
-                    { id: 'a1', role: 'assistant', content: 'old answer' },
-                ]) as any,
-                messages: ref([
-                    { id: 'u1', role: 'user', text: 'retry this' },
-                    { id: 'a1', role: 'assistant', text: 'old answer' },
-                ]) as any,
                 hooks: hooksSpy,
                 sendMessage: sendMessageSpy,
-                defaultModelId: 'default-model',
-                suppressNextTailFlush: vi.fn(),
+                defaultModelId: 'default-model', replaceCanonicalHistory: vi.fn(),
             },
             'u1',
             'override-model'
@@ -914,17 +912,9 @@ describe('continue/retry regressions', () => {
             {
                 loading: ref(false),
                 threadIdRef: ref('t1'),
-                tailAssistant: ref(null),
-                rawMessages: ref([
-                    { id: 'u2', role: 'user', content: 'retry solo' },
-                ]) as any,
-                messages: ref([
-                    { id: 'u2', role: 'user', text: 'retry solo' },
-                ]) as any,
                 hooks: hooksSpy,
                 sendMessage: sendMessageSpy,
-                defaultModelId: 'default-model',
-                suppressNextTailFlush: vi.fn(),
+                defaultModelId: 'default-model', replaceCanonicalHistory: vi.fn(),
             },
             'u2'
         );
@@ -973,17 +963,9 @@ describe('continue/retry regressions', () => {
             {
                 loading: ref(false),
                 threadIdRef: ref('t1'),
-                tailAssistant: ref(null),
-                rawMessages: ref([
-                    { id: 'u3', role: 'user', content: [{ type: 'text', text: 'image prompt' }] },
-                ]) as any,
-                messages: ref([
-                    { id: 'u3', role: 'user', text: 'image prompt' },
-                ]) as any,
                 hooks: hooksSpy,
                 sendMessage: sendMessageSpy,
-                defaultModelId: 'default-model',
-                suppressNextTailFlush: vi.fn(),
+                defaultModelId: 'default-model', replaceCanonicalHistory: vi.fn(),
             },
             'u3'
         );
@@ -1029,13 +1011,9 @@ describe('continue/retry regressions', () => {
             {
                 loading: ref(false),
                 threadIdRef: ref('t1'),
-                tailAssistant: ref(null),
-                rawMessages: ref([]),
-                messages: ref([]),
                 hooks: hooksSpy,
                 sendMessage: sendMessageSpy,
-                defaultModelId: 'model',
-                suppressNextTailFlush: vi.fn(),
+                defaultModelId: 'model', replaceCanonicalHistory: vi.fn(),
             },
             'a1'
         );
@@ -1051,7 +1029,7 @@ describe('continue/retry regressions', () => {
         );
     });
 
-    it('prefers the persisted turn relationship over the nearest user', async () => {
+    it('rejects a late old reply linked to a prior turn', async () => {
         const rows = [
             { id: 'u1', role: 'user', thread_id: 't1', index: 1, data: { content: 'first', turn_id: 'u1' }, deleted: false },
             { id: 'u2', role: 'user', thread_id: 't1', index: 2, data: { content: 'second' }, deleted: false },
@@ -1067,40 +1045,29 @@ describe('continue/retry regressions', () => {
             {
                 loading: ref(false),
                 threadIdRef: ref('t1'),
-                tailAssistant: ref(null),
-                rawMessages: ref([]),
-                messages: ref([]),
                 hooks: hooksSpy,
                 sendMessage: sendMessageSpy,
-                defaultModelId: 'model',
-                suppressNextTailFlush: vi.fn(),
+                defaultModelId: 'model', replaceCanonicalHistory: vi.fn(),
             },
             'a1'
         );
 
-        expect((sendMessageSpy.mock.calls[0] as unknown as [string, SendMessageParams])[0]).toBe('first');
-        expect((sendMessageSpy.mock.calls[0] as unknown as [string, { historyOverride: ChatMessage[] }])[1].historyOverride.map((message) => message.id)).toEqual(['u2']);
-        expect(hooksSpy.doAction).toHaveBeenCalledWith(
-            'ai.chat.retry:action:before',
-            expect.objectContaining({ originalUserId: 'u1' })
-        );
+        expect(sendMessageSpy).not.toHaveBeenCalled();
+        expect(hooksSpy.doAction).not.toHaveBeenCalled();
     });
 
-    it('moves only the selected turn to the bottom and preserves later turns', async () => {
+    it('replaces only the latest turn and preserves prior history', async () => {
         const rows = [
             { id: 'u0', role: 'user', thread_id: 't1', index: 1, data: { content: 'first' }, deleted: false },
             { id: 'a0', role: 'assistant', thread_id: 't1', index: 2, data: { content: 'answering' }, deleted: false },
             { id: 'u1', role: 'user', thread_id: 't1', index: 3, data: { content: 'retry me' }, deleted: false },
             { id: 'a1', role: 'assistant', thread_id: 't1', index: 4, data: { content: 'old' }, deleted: false },
-            { id: 'u2', role: 'user', thread_id: 't1', index: 5, data: { content: 'future' }, deleted: false },
-            { id: 'a2', role: 'assistant', thread_id: 't1', index: 6, data: { content: 'future answer' }, deleted: false },
         ];
         dbState.messagesGet.mockResolvedValue(rows[2]);
         messagesByThreadSpy.mockResolvedValue(rows);
         parseFileHashesSpy.mockReturnValue([]);
         const sendMessageSpy = vi.fn(async (_text: string, params: SendMessageParams) => {
-            expect(params.historyOverride?.map((message) => message.id)).toEqual(['u0', 'a0', 'u2', 'a2']);
-            expect(rawMessages.value.map((message: { id: string }) => message.id)).toEqual(['u0', 'a0', 'u2', 'a2']);
+            expect(params.historyOverride?.map((message) => message.id)).toEqual(['u0', 'a0']);
             expect(params.retryReplacement?.map(row => row.id).sort()).toEqual(['a1', 'u1']);
             return {
                 status: 'complete' as const, requestId: 'retry-7',
@@ -1108,22 +1075,18 @@ describe('continue/retry regressions', () => {
             };
         });
         const hooksSpy = { doAction: vi.fn(async () => {}) };
-        const rawMessages = ref([]) as any;
-        const messages = ref([]) as any;
 
         await retryMessageImpl(
             {
-                loading: ref(false), threadIdRef: ref('t1'), tailAssistant: ref(null),
-                rawMessages, messages,
+                loading: ref(false), threadIdRef: ref('t1'),
                 hooks: hooksSpy,
-                sendMessage: sendMessageSpy, defaultModelId: 'model',
-                suppressNextTailFlush: vi.fn(),
+                sendMessage: sendMessageSpy, defaultModelId: 'model', replaceCanonicalHistory: vi.fn(),
             },
             'u1'
         );
 
         expect(updateMessageRecordSpy).not.toHaveBeenCalled();
-        expect(rawMessages.value.map((m: { id: string }) => m.id)).toEqual(['u0', 'a0', 'u2', 'a2']);
+
         expect(hooksSpy.doAction).toHaveBeenCalledWith(
             'ai.chat.retry:action:after',
             expect.objectContaining({ supersededIds: ['u1', 'a1'] })
@@ -1147,10 +1110,9 @@ describe('continue/retry regressions', () => {
 
         const result = await retryMessageImpl(
             {
-                loading: ref(false), threadIdRef: ref('t1'), tailAssistant: ref(null),
-                rawMessages: ref([]), messages: ref([]), hooks,
-                sendMessage: vi.fn(async () => accepted), defaultModelId: 'model',
-                suppressNextTailFlush: vi.fn(),
+                loading: ref(false), threadIdRef: ref('t1'),
+                hooks,
+                sendMessage: vi.fn(async () => accepted), defaultModelId: 'model', replaceCanonicalHistory: vi.fn(),
             },
             'u1'
         );
@@ -1171,15 +1133,14 @@ describe('continue/retry regressions', () => {
         let release!: () => void;
         const hookPending = new Promise<void>((resolve) => { release = resolve; });
         const hook = vi.fn(() => hookPending);
-        const rawMessages = ref<ChatMessage[]>([{ id: 'current', role: 'user', content: 'current chat' }]);
-        const messages = ref([{ id: 'current', role: 'user', text: 'current chat' }]) as any;
+
         const threadIdRef = ref('t1');
         const loading = ref(false);
         let navigationRevision = 0;
         const sendMessage = vi.fn(async () => ({ status: 'rejected' as const, requestId: 'r', reason: 'busy' as const }));
         const retry = retryMessageImpl({
-            loading, threadIdRef, tailAssistant: ref(null), rawMessages, messages,
-            hooks: { doAction: hook }, sendMessage, defaultModelId: 'model', suppressNextTailFlush: vi.fn(),
+            loading, threadIdRef,
+            hooks: { doAction: hook }, sendMessage, defaultModelId: 'model', replaceCanonicalHistory: vi.fn(),
             ownsView: () => navigationRevision === 0,
         }, 'u1');
         await vi.waitFor(() => expect(hook).toHaveBeenCalled());
@@ -1190,36 +1151,28 @@ describe('continue/retry regressions', () => {
         await retry;
 
         expect(sendMessage).not.toHaveBeenCalled();
-        expect(rawMessages.value).toEqual([{ id: 'current', role: 'user', content: 'current chat' }]);
-        expect(messages.value[0]).toMatchObject({ id: 'current', text: 'current chat' });
+
         expect(updateMessageRecordSpy).not.toHaveBeenCalled();
     });
 
-    it('keeps later tool rows in context and restores the selected pair if resend is rejected', async () => {
+    it('keeps earlier tool rows in retry context even if resend is rejected', async () => {
         const rows = [
             { id: 'u0', role: 'user', thread_id: 't1', index: 1, data: { content: 'first' }, deleted: false },
             { id: 'a0', role: 'assistant', thread_id: 't1', index: 2, data: { content: 'calling', tool_calls: [{ id: 'c1' }] }, deleted: false },
             { id: 'tool0', role: 'tool', thread_id: 't1', index: 3, data: { content: 'result', tool_call_id: 'c1', tool_name: 'lookup' }, deleted: false },
             { id: 'u1', role: 'user', thread_id: 't1', index: 4, data: { content: 'retry me' }, deleted: false },
             { id: 'a1', role: 'assistant', thread_id: 't1', index: 5, data: { content: 'old' }, deleted: false },
-            { id: 'u2', role: 'user', thread_id: 't1', index: 6, data: { content: 'future' }, deleted: false },
-            { id: 'a2', role: 'assistant', thread_id: 't1', index: 7, data: { content: 'future answer' }, deleted: false },
-            { id: 'tool2', role: 'tool', thread_id: 't1', index: 8, data: { content: 'future result', tool_call_id: 'c2', tool_name: 'lookup' }, deleted: false },
         ];
         dbState.messagesGet.mockResolvedValue(rows[4]);
         messagesByThreadSpy.mockResolvedValue(rows);
         parseFileHashesSpy.mockReturnValue([]);
         const sendMessageSpy = vi.fn(async () => ({ status: 'rejected' as const, requestId: 'retry-4', reason: 'filtered' as const }));
 
-        const rawMessages = ref([]) as any;
-        const messages = ref([]) as any;
         const result = await retryMessageImpl(
             {
-                loading: ref(false), threadIdRef: ref('t1'), tailAssistant: ref(null),
-                rawMessages, messages,
+                loading: ref(false), threadIdRef: ref('t1'),
                 hooks: { doAction: vi.fn(async () => {}) },
-                sendMessage: sendMessageSpy, defaultModelId: 'model',
-                suppressNextTailFlush: vi.fn(),
+                sendMessage: sendMessageSpy, defaultModelId: 'model', replaceCanonicalHistory: vi.fn(),
             },
             'a1'
         );
@@ -1230,10 +1183,9 @@ describe('continue/retry regressions', () => {
             { historyOverride?: ChatMessage[] },
         ];
         const history = sendCall[1].historyOverride;
-        expect(history?.map((message: ChatMessage) => message.id)).toEqual(['u0', 'a0', 'tool0', 'u2', 'a2', 'tool2']);
+        expect(history?.map((message: ChatMessage) => message.id)).toEqual(['u0', 'a0', 'tool0']);
         expect(history?.[2]).toMatchObject({ role: 'tool', tool_call_id: 'c1', name: 'lookup' });
-        expect(rawMessages.value.map((message: { id: string }) => message.id)).toEqual(rows.map((row) => row.id));
-        expect(messages.value.map((message: { id: string }) => message.id)).toEqual(rows.filter((row) => row.role !== 'tool').map((row) => row.id));
+
         expect(updateMessageRecordSpy).not.toHaveBeenCalled();
         expect(dbState.messagesDelete).not.toHaveBeenCalled();
     });
@@ -1244,7 +1196,7 @@ describe('continue/retry regressions', () => {
             { id: 'u1', role: 'user', thread_id: 't1', index: 2, data: { content: 'retry me', turn_id: 'turn-1' }, deleted: false },
             { id: 'a1', role: 'assistant', thread_id: 't1', index: 3, data: { content: 'calling', parent_turn_id: 'turn-1' }, deleted: false },
             { id: 'tool1', role: 'tool', thread_id: 't1', index: 4, data: { content: 'result', parent_turn_id: 'turn-1' }, deleted: false },
-            { id: 'u2', role: 'user', thread_id: 't1', index: 5, data: { content: 'keep me' }, deleted: false },
+            { id: 'u2', role: 'user', thread_id: 't1', index: 1, data: { content: 'keep me' }, deleted: false },
         ];
         dbState.messagesGet.mockResolvedValue(rows[1]);
         messagesByThreadSpy.mockResolvedValue(rows);
@@ -1256,11 +1208,9 @@ describe('continue/retry regressions', () => {
 
         await retryMessageImpl(
             {
-                loading: ref(false), threadIdRef: ref('t1'), tailAssistant: ref(null),
-                rawMessages: ref([]), messages: ref([]),
+                loading: ref(false), threadIdRef: ref('t1'),
                 hooks: { doAction: vi.fn(async () => {}) },
-                sendMessage: sendMessageSpy, defaultModelId: 'model',
-                suppressNextTailFlush: vi.fn(),
+                sendMessage: sendMessageSpy, defaultModelId: 'model', replaceCanonicalHistory: vi.fn(),
             },
             'u1'
         );

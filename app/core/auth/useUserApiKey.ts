@@ -344,9 +344,18 @@ export function useUserApiKey() {
         readonly value: string | null;
     };
 
+    const connectionStatus = computed<'checking' | 'connected' | 'disconnected'>(() => {
+        if (!cloudMode()) return state.value.openrouterKey ? 'connected' : 'disconnected';
+        const result = cloudConnection.value;
+        // Only a successful response for the current account can say it lacks a key.
+        if (!result || result.owner !== currentKeyOwner()) return 'checking';
+        return result.connected ? 'connected' : 'disconnected';
+    });
+
     return {
         apiKey,
-        connected: computed(() => cloudMode() ? cloudConnection.value?.owner === currentKeyOwner() && cloudConnection.value.connected : Boolean(state.value.openrouterKey)),
+        connectionStatus,
+        connected: computed(() => connectionStatus.value === 'connected'),
         setKey,
         clearKey,
     };

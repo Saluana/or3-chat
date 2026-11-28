@@ -55,8 +55,9 @@ export interface ChatInstance {
     threadId: Ref<string | undefined>;
     requestState: Ref<ChatRequestState>;
     tailAssistant?: Ref<UiChatMessage | null>;
+    flushTailAssistant?: () => void;
     send: (params: SendMessageParams & { content: string }) => Promise<SendResult>;
-    retryMessage: (messageId: string, model?: string, options?: { afterEdit?: boolean }) => Promise<SendResult | undefined>;
+    retryMessage: (messageId: string, model?: string) => Promise<SendResult | undefined>;
     continueMessage?: (messageId: string, model?: string) => Promise<void>;
     abort: () => void;
     clear: () => void;

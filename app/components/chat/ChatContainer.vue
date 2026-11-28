@@ -43,7 +43,7 @@
         >
             <template #default="{ item, index }">
                 <div
-                    :key="item.id || item.stream_id || index"
+                    :key="messageKey(item) || index"
                     :class="CHAT_MESSAGE_ROW_CLASS"
                     :data-msg-id="item.id"
                     :data-stream-id="item.stream_id"
@@ -52,12 +52,15 @@
                         :renderer="readyMessageRenderer ?? messageRenderer"
                         :message="item"
                         :thread-id="props.threadId"
-                        :retry-disabled="retryPending || loading"
+                        :can-retry="item.id === retryTargetId"
+                        :retry-disabled="retryPending || loading || revisionPending"
+                        :revision-disabled="revisionPending || retryPending || streamingActive || compaction.active.value"
                         :compaction-action="compactionActionFor(item)"
                         :history-retrieval-available="
                             historyRetrievalAvailable
                         "
                         @retry="onRetry"
+                        @select-answer-version="onSelectAnswerVersion"
                         @continue="onContinue"
                         @branch="onBranch"
                         :on-view-compaction-source="onViewCompactionSource"
@@ -237,6 +240,8 @@ import { useIcon } from '~/composables/useIcon';
 import { useToast, useHooks, useChat, useRuntimeConfig, useRoute, useState } from '#imports';
 import { getMaxMessageFileHashes } from '~/db/files-util';
 import { kv } from '~/db';
+import { captureWorkspaceOperation } from '~/utils/chat/workspace-access';
+import { hasDurableSendAcceptance } from '~/utils/chat/types';
 import { getDb, getActiveWorkspaceId, getWorkspaceGeneration, subscribeActiveWorkspaceDb } from '~/db/client';
 import { useLocalWorkspaceSession } from '~/composables/auth/useLocalWorkspaceSession';
 import { liveQuery, type Subscription } from 'dexie';
@@ -381,7 +386,7 @@ const welcomeContextReady = computed(() => {
     return runtimeConfig.public.ssrAuthEnabled !== true || session?.authenticated === true &&
         session.workspace?.id === getActiveWorkspaceId();
 });
-const { apiKey, connected } = useUserApiKey();
+const { apiKey, connectionStatus } = useUserApiKey();
 const keyStateReady = ref(false);
 const welcomeDismissed = ref(true); // default hidden until hydrated
 // Start the independent reads while this component is being set up. Commit only
@@ -422,7 +427,8 @@ const showWelcomeCard = computed(
             ? !welcomePreviewDismissed.value
             : !welcomeDismissed.value &&
               openRouterAvailability.value.canAcceptUserKey &&
-              !connected.value && !openRouterAvailability.value.hasUsableKey(apiKey.value) && !openAiUsable.value &&
+              connectionStatus.value === 'disconnected' &&
+              !openRouterAvailability.value.hasUsableKey(apiKey.value) && !openAiUsable.value &&
               allMessages.value.length === 0)
 );
 
@@ -643,6 +649,7 @@ const workflowStates = reactive(new Map<string, UiWorkflowState>());
 
 const loading = computed(() => visibleChat.value?.loading?.value || false);
 const retryPending = ref(false);
+const revisionPending = ref(false);
 const backgroundJobId = computed(() =>
     unwrapRef(chat.value?.backgroundJobId ?? null)
 );
@@ -672,7 +679,7 @@ watch(
     { immediate: true }
 );
 const inputLoading = computed(
-    () => retryPending.value || loading.value || backgroundStreaming.value
+    () => revisionPending.value || retryPending.value || loading.value || backgroundStreaming.value
 );
 
 // Tail streaming now provided directly by useChat composable
@@ -829,11 +836,21 @@ const stableMessageIdentities = computed(() => {
     return identities;
 });
 const allMessages = shallowRef<UiChatMessage[]>([]);
+const retryTargetId = computed(() => {
+    const rows = allMessages.value;
+    const latest = rows.findLastIndex(row => row.role === 'user');
+    const prompt = rows[latest];
+    if (!prompt || (prompt.sourceThreadId && prompt.sourceThreadId !== currentThreadId.value)) return;
+    const answer = rows.findLast((row, index) => row.role === 'assistant'
+        && (!row.sourceThreadId || row.sourceThreadId === currentThreadId.value)
+        && (row.parentTurnId ? row.parentTurnId === (prompt.turnId || prompt.id) : index > latest));
+    return answer?.id ?? prompt.id;
+});
 // Only the scroller subscribes to tail slot writes. Its resize observer
 // measures height changes without synchronously measuring every mounted row.
 const scrollItems = computed(() => shallowReactive(allMessages.value));
 function messageKey(message: UiChatMessage) {
-    return message.id || message.stream_id || '';
+    return message.answerVersions ? `answer-version:${message.answerVersions.groupId}` : message.id || message.stream_id || '';
 }
 const compactionPreferences = useAiSettings();
 const compactionModels = useModelStore();
@@ -1354,7 +1371,7 @@ onBeforeUnmount(() => {
 const tabSendTokens = new Map<string, object>();
 
 function onSend(payload: ChatInputSendPayload) {
-    if (loading.value || retryPending.value || compaction.active.value) return;
+    if (loading.value || retryPending.value || revisionPending.value || compaction.active.value) return;
     model.value = appendModelVariant(stripLegacyThinkingSuffix(payload.model || model.value), payload.modelVariant ?? 'off');
     const attachments = payload.attachments?.length
         ? payload.attachments
@@ -1440,16 +1457,61 @@ function onSend(payload: ChatInputSendPayload) {
         }, finishTabSend);
 }
 
-async function onRetry(messageId: string, options: { afterEdit?: boolean } = {}) {
+async function refreshAnswerHistory(activeChat: ChatInstance, threadId: string, ownsView: () => boolean) {
+    const { ensureThreadHistoryLoaded } = await import('~/utils/chat/history');
+    const history = ref<ChatMessageType[]>([]);
+    if (await ensureThreadHistoryLoaded(ref(threadId), ref<string | null>(null), history)
+        && ownsView() && !activeChat.loading.value) {
+        activeChat.flushTailAssistant?.();
+        activeChat.replaceCanonicalHistory?.(history.value);
+    }
+}
+
+async function onSelectAnswerVersion(currentId: string, targetId: string) {
     const activeChat = chat.value;
-    if (!activeChat || activeChat.loading.value || retryPending.value || compaction.active.value) return;
+    const threadId = activeChat.threadId.value;
+    if (!threadId || revisionPending.value || retryPending.value || streamingActive.value || compaction.active.value) return;
+    const rebind = paneRebindRevision;
+    try {
+        revisionPending.value = true;
+        const scope = captureWorkspaceOperation({
+            threadId, workspaceId: getActiveWorkspaceId() ?? 'local',
+            messageId: currentId, callId: 'answer-version', requestId: 'answer-version',
+            subject: null, abortSignal: new AbortController().signal,
+        });
+        const { selectAnswerVersion } = await import('~/db/answer-revisions');
+        const changed = await selectAnswerVersion(scope, threadId, currentId, targetId);
+        await refreshAnswerHistory(activeChat, threadId, () =>
+            paneRebindRevision === rebind && activeChat.threadId.value === threadId
+            && getDb() === scope.db && getWorkspaceGeneration() === scope.generation);
+        if (!changed) toast.add({ title: 'Answer version changed', color: 'warning' });
+    } catch (error) {
+        toast.add({ title: 'Answer version unavailable', description: presentError(error).message, color: 'warning' });
+    } finally {
+        revisionPending.value = false;
+        nextTick(() => scroller.value?.refreshMeasurements?.());
+    }
+}
+
+async function onRetry(messageId: string) {
+    const activeChat = chat.value;
+    if (!activeChat || activeChat.loading.value || retryPending.value || revisionPending.value || compaction.active.value) return;
+    const threadId = activeChat.threadId.value;
+    const rebind = paneRebindRevision;
+    const database = getDb();
+    const generation = getWorkspaceGeneration();
     retryPending.value = true;
     try {
         // A retry is appended after the remaining conversation. Move the
         // viewport there immediately instead of leaving it at the old turn.
         await nextTick();
         scroller.value?.scrollToBottom?.({ smooth: false });
-        const result = await activeChat.retryMessage(messageId, model.value, options);
+        const result = await activeChat.retryMessage(messageId, model.value);
+        if (threadId && result && result.status !== 'detached' && hasDurableSendAcceptance(result)) {
+            await refreshAnswerHistory(activeChat, threadId, () =>
+                paneRebindRevision === rebind && activeChat.threadId.value === threadId
+                && getDb() === database && getWorkspaceGeneration() === generation);
+        }
         if (!result || result.status === 'rejected' || result.status === 'failed' && result.reason === 'unavailable') {
             toast.add({
                 title: 'Retry did not start',
@@ -1473,7 +1535,7 @@ async function onRetry(messageId: string, options: { afterEdit?: boolean } = {})
 }
 
 function onContinue(messageId: string) {
-    if (!chat.value || chat.value?.loading?.value) return;
+    if (!chat.value || chat.value?.loading?.value || revisionPending.value) return;
     chat.value.continueMessage?.(messageId, model.value);
     nextTick(() => scroller.value?.refreshMeasurements?.());
 }
@@ -1492,16 +1554,7 @@ function onEdited(payload: { id: string; content: string }) {
         typeof chat.value.applyLocalEdit === 'function'
             ? chat.value.applyLocalEdit(payload.id, payload.content)
             : false;
-    // Only a changed, persisted save emits `edited`. An edited prompt asks a
-    // different question, so re-run its turn; assistant edits stay corrections.
-    if (messages.value.find((message) => message.id === payload.id)?.role === 'user') {
-        void onRetry(payload.id, { afterEdit: true });
-    }
-    if (applied) {
-        // Content changed size, force measure
-        nextTick(() => scroller.value?.refreshMeasurements?.());
-        return;
-    }
+    if (applied) nextTick(() => scroller.value?.refreshMeasurements?.());
 }
 
 function onPendingPromptSelected(promptId: string | null) {

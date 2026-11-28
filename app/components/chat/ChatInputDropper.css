@@ -161,11 +161,9 @@ textarea::-webkit-scrollbar-thumb:hover {
     position: relative;
 }
 .prosemirror-host :deep(p.is-editor-empty:first-child::before) {
-    /* Use design tokens; ensure sufficient contrast in dark mode */
-    color: color-mix(in oklab, var(--md-on-surface-variant), transparent 30%);
+    color: var(--md-on-surface-variant);
     content: attr(data-placeholder);
     pointer-events: none;
-    opacity: 0.85; /* increase for dark background readability */
     font-weight: normal;
     position: absolute;
     inset-inline-start: 0;

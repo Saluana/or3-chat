@@ -14,13 +14,15 @@ import {
     canonicalToolResultData,
 } from '~~/shared/chat/canonical-tool-transcript';
 
+import type { AnswerVersionNavigation } from './answer-revisions';
+
 export const TRANSCRIPT_VERSION = 1 as const;
 
 /**
  * Data key marking a row as replaced by a retry. Rows carrying a
  * `superseded_by` message id are excluded from provider context, history
  * reloads, and future sends. Only the selected turn is superseded by an
- * in-thread retry; unrelated later turns remain visible. The old rows are
+ * in-thread retry; earlier turns remain visible. The old rows are
  * preserved for audit and reload stability.
  */
 export const SUPERSEDED_BY_KEY = 'superseded_by' as const;
@@ -89,6 +91,8 @@ export interface CanonicalTranscriptRecord {
     fileHashes: string[];
     index: number;
     orderKey?: string;
+    editId?: string;
+    answerVersions?: AnswerVersionNavigation;
     createdAt: number;
     streamId?: string;
     pending: boolean;
@@ -109,6 +113,7 @@ cardOrigin?: CardOrigin;
 }
 
 type StoredTranscriptMessage = Message & {
+    answerVersions?: AnswerVersionNavigation;
     content?: ChatMessage['content'];
     reasoning_text?: string | null;
 };
@@ -214,6 +219,8 @@ export function messageToCanonicalTranscript(
         fileHashes: safeFileHashes(message.file_hashes),
         index: message.index,
         orderKey: message.order_key,
+        answerVersions: message.answerVersions,
+        editId: typeof data.edit_id === 'string' ? data.edit_id : undefined,
         createdAt: message.created_at,
         streamId: message.stream_id ?? undefined,
         pending: message.pending === true,
@@ -337,6 +344,7 @@ export function projectTranscriptForOpenRouter(
             : undefined;
         const message: ChatMessage = {
             id: record.id,
+            ...(record.answerVersions ? { answerVersions: record.answerVersions } : {}),
             role: record.role,
             content: record.content,
             file_hashes: record.fileHashes.length
@@ -353,6 +361,7 @@ export function projectTranscriptForOpenRouter(
             tool_call_id: record.callId,
             tool_calls: toolCalls,
             data: {
+                ...(record.editId ? { edit_id: record.editId } : {}),
                 ...(record.compaction ? { kind: 'compaction', compaction: record.compaction } : {}),
                 ...(record.usage ? { usage: record.usage } : {}),
                 ...(record.cardOrigin
