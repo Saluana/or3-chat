@@ -56,7 +56,9 @@
 
             <!-- Rows stay quiet: tap highlights a model; the action bar acts on it. -->
             <div class="settings-page-body">
-                <p v-if="!catalog.length" class="settings-page-empty">Loading models…</p>
+                <p v-if="catalogStatus === 'loading' && !sourceModels.length" class="settings-page-empty">
+                    Loading models…
+                </p>
                 <section
                     v-for="section in sections"
                     :key="section.key"
@@ -126,7 +128,7 @@
                 >
                     Show more models
                 </UButton>
-                <p v-if="catalog.length && !sections.length" class="settings-page-empty">
+                <p v-if="(catalogStatus !== 'loading' || sourceModels.length) && !sections.length" class="settings-page-empty">
                     {{ emptyMessage }}
                 </p>
             </div>
@@ -175,6 +177,7 @@ import { useWorkspaceModels } from '~/composables/chat/useWorkspaceModels';
 import { useIcon } from '~/composables/useIcon';
 import { useSettingsLibraryTheme } from '~/composables/chat/useSettingsLibraryTheme';
 import { isModelHidden } from '~~/shared/ai/workspace-models';
+import { modelIdentity } from '~~/shared/ai/model-catalog';
 import {
     formatModelName,
     getCapabilities,
@@ -222,8 +225,28 @@ const {
     addFavoriteModel,
     removeFavoriteModel,
 } = useModelStore();
-const { policy } = useWorkspaceModels();
-const { query, results } = useModelSearch(catalog);
+const workspaceModels = useWorkspaceModels();
+const policy = workspaceModels.policy;
+
+// Saved favorites stay pickable when the live catalog is empty or unavailable:
+// the list merges them in behind catalog entries. A ref (not a computed) so
+// the search index can track it.
+const sourceModels = ref<OpenRouterModel[]>([]);
+watch(
+    [catalog, favoriteModels],
+    () => {
+        const merged = new Map(catalog.value.map((model) => [model.id, model]));
+        for (const favorite of favoriteModels.value ?? []) {
+            if (favorite?.id && !merged.has(favorite.id)) merged.set(favorite.id, favorite);
+        }
+        sourceModels.value = [...merged.values()];
+    },
+    { immediate: true }
+);
+const { query, results } = useModelSearch(sourceModels);
+
+/** Fetch completion, tracked apart from catalog length (which can stay empty). */
+const catalogStatus = ref<'loading' | 'ready' | 'unavailable'>('loading');
 
 type Scope = 'all' | 'favorites';
 const scopeOptions: Array<{ value: Scope; label: string }> = [
@@ -312,7 +335,7 @@ function toggleFavorite(model: OpenRouterModel) {
 }
 
 const available = computed(() =>
-    (query.value.trim() ? results.value : catalog.value).filter(
+    (query.value.trim() ? results.value : sourceModels.value).filter(
         (model) => isChatModel(model) && !isModelHidden(policy.value, model.id)
     )
 );
@@ -346,8 +369,8 @@ function toRow(model: OpenRouterModel) {
     return {
         id: model.id,
         name: formatModelName(model.name || model.id),
-        // Names already carry the maker ("Anthropic: …"), so rows list capabilities.
-        subtitle: labels.length ? labels.join(' · ') : 'Text',
+        // Names carry the maker; the platform shows which credential is billed.
+        subtitle: [modelIdentity(model).platformName, ...(labels.length ? labels : ['Text'])].join(' · '),
         slug: getProviderSlug(model),
         selected: isSelected(model),
         highlighted: model.id === highlightedId.value,
@@ -364,7 +387,7 @@ const groupedView = computed(
 
 const allSections = computed(() => {
     const models = filtered.value;
-    if (!groupedView.value) return [{ key: 'results', title: '', models }];
+    if (!groupedView.value) return models.length ? [{ key: 'results', title: '', models }] : [];
     const byId = new Map(models.map((model) => [model.id, model]));
     const favorites = models.filter((model) => isFavorite(model.id));
     const recent = (recentModelIds.value ?? [])
@@ -402,6 +425,9 @@ const hiddenCount = computed(() => {
 });
 
 const emptyMessage = computed(() => {
+    if (catalogStatus.value === 'unavailable' && !sourceModels.value.length) {
+        return 'Models are unavailable right now.';
+    }
     if (query.value.trim() || capability.value !== 'all') return 'No models match.';
     if (scope.value === 'favorites') return 'No favorite models yet. Open a model’s details to add one.';
     return 'No models available.';
@@ -413,7 +439,7 @@ watch([query, scope, capability, sort], () => {
 
 const detailModel = computed(() =>
     props.detailId
-        ? catalog.value.find((model) => model.id === props.detailId) ?? null
+        ? sourceModels.value.find((model) => model.id === props.detailId) ?? null
         : null
 );
 
@@ -423,12 +449,21 @@ function openDetail(id: string, trigger: EventTarget | null) {
     detailTrigger = trigger instanceof HTMLElement ? trigger : null;
     emit('open-detail', id);
 }
+watch(
+    () => props.detailId,
+    async (id, previous) => {
+        if (id || !previous) return;
+        // The list is shown again on the next render; then return focus.
+        await nextTick();
+        if (detailTrigger?.isConnected) detailTrigger.focus();
+    }
+);
 
 // Tapping a row highlights it for the action bar; tapping it again uses it.
 const highlightedId = ref<string | null>(null);
 const highlightedModel = computed(() =>
     highlightedId.value
-        ? catalog.value.find((model) => model.id === highlightedId.value) ?? null
+        ? sourceModels.value.find((model) => model.id === highlightedId.value) ?? null
         : null
 );
 const highlightedFavorite = computed(
@@ -446,10 +481,10 @@ const highlightedIsCurrent = computed(
 
 // Start on the model in use so the bar is useful before any tap.
 watch(
-    [catalog, () => props.selectedModel],
+    [sourceModels, () => props.selectedModel],
     () => {
         if (highlightedId.value) return;
-        highlightedId.value = catalog.value.find((model) => isSelected(model))?.id ?? null;
+        highlightedId.value = sourceModels.value.find((model) => isSelected(model))?.id ?? null;
     },
     { immediate: true }
 );
@@ -463,7 +498,11 @@ function onRowClick(id: string) {
 }
 
 onMounted(() => {
-    void fetchModels().catch(() => undefined);
+    void fetchModels()
+        .then(() => { catalogStatus.value = 'ready'; })
+        .catch(() => { catalogStatus.value = 'unavailable'; });
+    // TTL-aware: picks up models an admin hid while this chat stayed open.
+    void workspaceModels.load().catch(() => undefined);
     void loadRecentModels().catch(() => undefined);
     void getFavoriteModels().then((models) => {
         favoriteModels.value = models;

@@ -10,6 +10,9 @@ const store = vi.hoisted(() => ({
     recent: null as unknown as import('vue').Ref<string[]>,
     addFavorite: vi.fn(),
     removeFavorite: vi.fn(),
+    fetchModels: vi.fn(),
+    loadPolicy: vi.fn(),
+    hidden: [] as string[],
 }));
 
 vi.mock('~/composables/chat/useModelStore', () => ({
@@ -19,14 +22,17 @@ vi.mock('~/composables/chat/useModelStore', () => ({
         recentModelIds: store.recent,
         loadRecentModels: vi.fn(async () => {}),
         getFavoriteModels: vi.fn(async () => store.favorites.value),
-        fetchModels: vi.fn(async () => store.catalog.value),
+        fetchModels: store.fetchModels,
         addFavoriteModel: store.addFavorite,
         removeFavoriteModel: store.removeFavorite,
     }),
 }));
 
 vi.mock('~/composables/chat/useWorkspaceModels', () => ({
-    useWorkspaceModels: () => ({ policy: ref({ hidden: ['hidden/model'], pinned: [] }) }),
+    useWorkspaceModels: () => ({
+        policy: ref({ hidden: store.hidden, pinned: [] }),
+        load: store.loadPolicy,
+    }),
 }));
 
 // Search ranking belongs to useModelSearch's own suite; with no query the
@@ -60,8 +66,9 @@ const menuStub = {
     template: '<div class="menu-stub"><slot /></div>',
 };
 
-function mountPage(props: Record<string, unknown> = {}) {
+function mountPage(props: Record<string, unknown> = {}, attachTo?: HTMLElement) {
     return mount(ChatSettingsModelsPage, {
+        attachTo,
         props: { selectedModel: 'openai/gpt-4o', detailId: null, ...props },
         global: {
             directives: { theme: {} },
@@ -120,6 +127,9 @@ describe('ChatSettingsModelsPage', () => {
         ]);
         store.favorites = ref([store.catalog.value[1]!]);
         store.recent = ref(['google/gemini-pro', 'anthropic/claude-sonnet']);
+        store.hidden = ['hidden/model'];
+        store.fetchModels.mockImplementation(async () => store.catalog.value);
+        store.loadPolicy.mockImplementation(async () => {});
     });
 
     it('groups favorites, recent, and remaining chat models without counts', async () => {
@@ -135,7 +145,75 @@ describe('ChatSettingsModelsPage', () => {
         ]);
         const current = wrapper.find('[data-model-id="openai/gpt-4o"] .settings-page-row-main');
         expect(current.attributes('aria-current')).toBe('true');
-        expect(current.text()).toContain('Vision · Tools');
+        // The platform names the credential that will be billed.
+        expect(current.find('.settings-page-row-description').text()).toBe('OpenRouter · Vision · Tools');
+    });
+
+    it('shows the billing platform for direct OpenAI models', async () => {
+        store.catalog.value = [model('@openai/gpt-5', { name: 'GPT-5 (OpenAI key)' } as Partial<OpenRouterModel>)];
+        store.favorites.value = [];
+        const wrapper = mountPage();
+        await flushPromises();
+        expect(wrapper.find('.settings-page-row-description').text()).toBe('OpenAI · Text');
+    });
+
+    it('keeps saved favorites pickable when the catalog is empty', async () => {
+        const saved = store.favorites.value[0]!;
+        store.catalog.value = [];
+        store.favorites.value = [saved, model('hidden/model')];
+        const wrapper = mountPage();
+        await flushPromises();
+        // Workspace visibility still applies to the fallback list.
+        expect(rowIds(wrapper)).toEqual(['anthropic/claude-sonnet']);
+        expect(wrapper.text()).not.toContain('Loading models');
+    });
+
+    it('stops loading and says so when the catalog is unavailable', async () => {
+        store.catalog.value = [];
+        store.favorites.value = [];
+        store.fetchModels.mockImplementation(async () => { throw new Error('offline'); });
+        const wrapper = mountPage();
+        expect(wrapper.text()).toContain('Loading models');
+        await flushPromises();
+        expect(wrapper.text()).not.toContain('Loading models');
+        expect(wrapper.text()).toContain('Models are unavailable right now.');
+    });
+
+    it('refreshes workspace model policy when the page opens', async () => {
+        mountPage();
+        await flushPromises();
+        expect(store.loadPolicy).toHaveBeenCalledTimes(1);
+        expect(store.loadPolicy).toHaveBeenCalledWith();
+    });
+
+    it('explains empty filtered views instead of rendering a blank list', async () => {
+        store.favorites.value = [];
+        const wrapper = mountPage();
+        await flushPromises();
+        await wrapper.findAll('.settings-page-chip')[1]!.trigger('click');
+        expect(rowIds(wrapper)).toEqual([]);
+        expect(wrapper.text()).toContain('No favorite models yet');
+
+        await wrapper.findAll('.settings-page-chip')[0]!.trigger('click');
+        menuItem(wrapper, 'Free').onUpdateChecked!(true);
+        await flushPromises();
+        expect(wrapper.text()).toContain('No models match.');
+    });
+
+    it('returns focus to the details button after leaving model details', async () => {
+        const host = document.createElement('div');
+        document.body.appendChild(host);
+        const wrapper = mountPage({}, host);
+        await flushPromises();
+        await wrapper.find('[data-model-id="google/gemini-pro"] .settings-page-row-main').trigger('click');
+        const details = wrapper.find('[data-model-id="google/gemini-pro"] [aria-label="Model details"]');
+        await details.trigger('click');
+        await wrapper.setProps({ detailId: 'google/gemini-pro' });
+        await wrapper.setProps({ detailId: null });
+        await flushPromises();
+        expect(document.activeElement).toBe(details.element);
+        wrapper.unmount();
+        host.remove();
     });
 
     it('highlights a tapped row and uses it on a second tap', async () => {
