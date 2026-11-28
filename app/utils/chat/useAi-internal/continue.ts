@@ -308,9 +308,14 @@ export async function continueMessageImpl(
         // closed by its result (or an "outcome unresolved" result for a call
         // the stopped turn never finished). Strict providers such as OpenAI
         // reject a tool result without its call, or a call without a result.
+        // The recovery instruction below supplies the selected answer's text
+        // tail. Keep the anchor's tools and media, not a second copy of its text.
         const baseMessages: ChatMessage[] = projectTranscriptForOpenRouter(
             storedMessagesToCanonicalTranscript(all)
-        ).map((m) => (m.id === target.id ? { ...m, content: existingText } : m));
+        ).map((message) => message.id === target.id ? {
+            ...message,
+            content: Array.isArray(message.content) ? message.content.filter(part => part.type !== 'text') : '',
+        } : message);
 
         const tailSnippet = existingText.slice(-CONTINUE_TAIL_CHARS);
         const continuationText = buildContinuationText(tailSnippet);
@@ -357,15 +362,14 @@ export async function continueMessageImpl(
         ).filter((message): message is ChatMessage => {
             if (!message || typeof message !== 'object') return false;
             const candidate = message as Partial<ChatMessage>;
-            return (
-                typeof candidate.role === 'string' &&
-                shouldKeepAssistantMessage({
-                    role: candidate.role,
-                    content: candidate.content,
-                    tool_calls: candidate.tool_calls,
-                    data: candidate.data,
-                })
-            );
+            if (typeof candidate.role !== 'string') return false;
+            if (candidate.id === target.id && candidate.file_hashes) return true;
+            return shouldKeepAssistantMessage({
+                role: candidate.role,
+                content: candidate.content,
+                tool_calls: candidate.tool_calls,
+                data: candidate.data,
+            });
         });
 
         const selection = resolveOpenRouterLegacySelection({ model: modelOverride || ctx.defaultModelId });

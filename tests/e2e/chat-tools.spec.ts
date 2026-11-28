@@ -298,9 +298,11 @@ for (const reload of [false, true]) test(`uncertain write refuses native Retry${
         await page.reload();
         await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible();
         await expect.poll(async () => (await snapshot(page)).calls[0]?.outcome).toBe('unresolved');
-        await expect(page.getByRole('button', { name: 'Retry message', exact: true })).toHaveCount(2);
     }
-    await page.getByRole('button', { name: 'Retry message', exact: true }).last().click({ force: true });
+    const retry = page.getByRole('button', { name: 'Retry message', exact: true });
+    await expect(retry).toHaveCount(1);
+    const affectedReply = page.locator('[data-msg-id]').filter({ has: page.locator('.tool-call-indicator') });
+    await affectedReply.getByRole('button', { name: 'Retry message', exact: true }).click({ force: true });
     await expect(page.getByText('Retry did not start', { exact: true })).toBeVisible();
     await expect(page.getByRole('region', { name: 'Notifications (F8)' })
         .getByText(/Retry is blocked to avoid repeating an operation/)).toBeVisible();

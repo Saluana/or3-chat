@@ -51,6 +51,14 @@ it.each([false, true])('persists measured continuation usage through canonical r
         resolveContextPolicy: async () => ({ model: { context_length: 1_000_000 },
             userMaxContextTokens: null, source: 'openrouter-live' }) };
     await continueMessageImpl(ctx, 'assistant');
+    const wire = provider.mock.calls[0]?.[0].orMessages;
+    expect(wire).toEqual([
+        { role: 'system', content: [{ type: 'text', text: expect.stringContaining('text autocomplete engine') }] },
+        { role: 'user', content: [
+            { type: 'text', text: 'Continue this' },
+            { type: 'text', text: expect.stringContaining('<<CONTEXT>>\nHello\n<<END CONTEXT>>') },
+        ] },
+    ]);
     const stored = (await db.messages.get('assistant'))!; const canonical = storedMessagesToCanonicalTranscript([stored])[0]!;
     expect(canonical.content).toBe('Hello world');
     expect(canonical.usage).toMatchObject({ prompt_tokens: 456, completion_tokens: 12, request_id: 'continued-request', iteration: 1, prefix_message_count: 2 });
