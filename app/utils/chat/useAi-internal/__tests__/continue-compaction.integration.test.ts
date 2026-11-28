@@ -50,6 +50,14 @@ async function prepare(owner: string, target: string, cancelDuringRead = false) 
     return ctx;
 }
 function inputs(): ChatMessage[] { return boundary.build.mock.calls[0]?.[0]?.effectiveMessages ?? []; }
+function expectHistoryAndContinuation(historyIds: string[], selectedText: string) {
+    const messages = inputs().filter((item) => !item.id?.startsWith('system-'));
+    expect(messages.slice(0, -1).map((item) => item.id)).toEqual(historyIds);
+    expect(messages.at(-1)).toMatchObject({
+        role: 'user',
+        content: [{ type: 'text', text: expect.stringContaining(selectedText) }],
+    });
+}
 function summary() {
     return { kind: 'compaction', content: 'Historical summary', compaction: { version: 1, compaction_id: 'operation', source_thread_id: 'old', anchor_message_id: 'old-anchor', anchor_index: 0,
         generated_at: 1, model: 'model', message_count: 4, prior_message_count: 0, summary_markdown: 'Historical summary', landmarks: [], history_scope: { version: 1, segments: [] } } };
@@ -60,17 +68,19 @@ describe('native continuation canonical preparation', () => {
         await thread('first', { branch_mode: 'reference', parent_thread_id: 'root', anchor_message_id: 'root-anchor' });
         await row('first-user', 'first', 0); await row('first-anchor', 'first', 1, 'assistant'); await row('first-later', 'first', 2);
         await thread('second', { branch_mode: 'reference', parent_thread_id: 'first', anchor_message_id: 'first-anchor' });
-        await row('second-user', 'second', 0); await row('target', 'second', 1, 'assistant'); await row('second-later', 'second', 2);
+        await row('second-user', 'second', 0); await row('target', 'second', 1, 'assistant', { content: 'End of the selected reference answer.' }); await row('second-later', 'second', 2);
         await prepare('second', 'target');
-        expect(inputs().filter((item) => !item.id?.startsWith('system-') && !item.id?.startsWith('continue-')).map((item) => item.id))
-            .toEqual(['root-user', 'root-anchor', 'first-user', 'first-anchor', 'second-user', 'target']);
+        expectHistoryAndContinuation(
+            ['root-user', 'root-anchor', 'first-user', 'first-anchor', 'second-user'],
+            'End of the selected reference answer.',
+        );
     });
     it('uses only the summary and new turns with its original source deleted but ownership retained', async () => {
         await thread('old', { deleted: true });
         await thread('child', { branch_mode: 'compacted', parent_thread_id: 'old', anchor_message_id: 'old-anchor', summary_message_id: 'summary' });
-        await row('summary', 'child', 0, 'system', summary()); await row('new-user', 'child', 1); await row('target', 'child', 2, 'assistant'); await row('later', 'child', 3);
+        await row('summary', 'child', 0, 'system', summary()); await row('new-user', 'child', 1); await row('target', 'child', 2, 'assistant', { content: 'End of the selected compacted answer.' }); await row('later', 'child', 3);
         await prepare('child', 'target');
-        expect(inputs().filter((item) => !item.id?.startsWith('system-') && !item.id?.startsWith('continue-')).map((item) => item.id)).toEqual(['summary', 'new-user', 'target']);
+        expectHistoryAndContinuation(['summary', 'new-user'], 'End of the selected compacted answer.');
         expect(inputs().find((item) => item.id === 'summary')?.role).toBe('system');
     });
     it.each(['missing', 'wrong-role', 'wrong-source'] as const)('rejects an invalid summary pair (%s) before payload preparation and pending writes', async (kind) => {
