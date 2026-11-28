@@ -4,6 +4,7 @@
             <div class="settings-page-toolbar">
                 <UInput
                     v-model="query"
+                    v-bind="theme.searchProps.value"
                     class="settings-page-search w-full"
                     :icon="searchIcon"
                     placeholder="Search models"
@@ -15,6 +16,7 @@
                         <button
                             v-for="option in scopeOptions"
                             :key="option.value"
+                            v-theme="{ identifier: theme.ids.chip, context: 'settings' }"
                             type="button"
                             class="settings-page-chip"
                             :aria-pressed="scope === option.value"
@@ -24,6 +26,7 @@
                         </button>
                         <button
                             v-if="activeCapability"
+                            v-theme="{ identifier: theme.ids.chip, context: 'settings' }"
                             type="button"
                             class="settings-page-chip"
                             aria-pressed="true"
@@ -40,10 +43,7 @@
                         :ui="{ content: 'min-w-52' }"
                     >
                         <UButton
-                            variant="ghost"
-                            color="neutral"
-                            size="sm"
-                            square
+                            v-bind="theme.filterProps.value"
                             class="settings-page-filter"
                             :aria-label="filtersActive ? 'Filter and sort models (active)' : 'Filter and sort models'"
                         >
@@ -72,6 +72,7 @@
                             :data-model-id="row.id"
                         >
                             <button
+                                v-theme="{ identifier: theme.ids.row, context: 'settings' }"
                                 type="button"
                                 class="settings-page-row-main"
                                 :aria-pressed="row.highlighted"
@@ -111,11 +112,10 @@
                 </p>
             </div>
 
+            <!-- Secondary actions lead; the primary action sits at the trailing edge. -->
             <div class="settings-page-footer settings-page-actions">
                 <UButton
-                    variant="outline"
-                    color="neutral"
-                    square
+                    v-bind="theme.actionProps.value"
                     class="settings-page-action"
                     :icon="highlightedFavorite ? starFilledIcon : starIcon"
                     :aria-label="highlightedFavorite ? 'Remove from favorites' : 'Add to favorites'"
@@ -124,9 +124,7 @@
                     @click="highlightedModel && toggleFavorite(highlightedModel)"
                 />
                 <UButton
-                    variant="outline"
-                    color="neutral"
-                    square
+                    v-bind="theme.actionProps.value"
                     class="settings-page-action"
                     :icon="infoIcon"
                     aria-label="Model details"
@@ -134,12 +132,22 @@
                     @click="highlightedModel && openDetail(highlightedModel.id, $event?.currentTarget ?? null)"
                 />
                 <UButton
-                    color="primary"
+                    v-if="highlightedIsCurrent"
+                    v-bind="theme.inUseProps.value"
+                    class="settings-page-use is-current"
+                    :icon="checkIcon"
+                    disabled
+                >
+                    In use
+                </UButton>
+                <UButton
+                    v-else
+                    v-bind="theme.useProps.value"
                     class="settings-page-use"
-                    :disabled="!highlightedModel || highlightedIsCurrent || disabled"
+                    :disabled="!highlightedModel || disabled"
                     @click="highlightedModel && emit('select', highlightedModel.id)"
                 >
-                    {{ highlightedIsCurrent ? 'In use' : 'Use model' }}
+                    Use model
                 </UButton>
             </div>
         </div>
@@ -163,6 +171,7 @@ import { useModelSearch } from '~/core/search/useModelSearch';
 import { useModelStore } from '~/composables/chat/useModelStore';
 import { useWorkspaceModels } from '~/composables/chat/useWorkspaceModels';
 import { useIcon } from '~/composables/useIcon';
+import { useSettingsLibraryTheme } from '~/composables/chat/useSettingsLibraryTheme';
 import { isModelHidden } from '~~/shared/ai/workspace-models';
 import {
     formatModelName,
@@ -192,6 +201,7 @@ const emit = defineEmits<{
     (e: 'open-detail', modelId: string): void;
 }>();
 
+const theme = useSettingsLibraryTheme();
 const searchIcon = useIcon('ui.search');
 const filterIcon = useIcon('catalog.filter');
 const infoIcon = useIcon('ui.info');
@@ -662,17 +672,36 @@ onMounted(() => {
 .settings-page-actions {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.25rem;
+    --settings-action-size: 2.25rem;
+}
+
+/* One height for every control in the bar; touch screens get 44px targets. */
+@media (pointer: coarse) {
+    .settings-page-actions {
+        --settings-action-size: 2.75rem;
+    }
 }
 
 .settings-page-action {
     flex: none;
+    width: var(--settings-action-size);
+    height: var(--settings-action-size);
     justify-content: center;
 }
 
 .settings-page-use {
-    flex: 1;
+    flex: none;
+    min-width: 7.5rem;
+    height: var(--settings-action-size);
+    margin-inline-start: auto;
     justify-content: center;
+}
+
+/* "In use" is a status, not a faded button. */
+.settings-page-use.is-current:disabled {
+    cursor: default;
+    opacity: 1;
 }
 
 /* Below 16px, iOS Safari zooms the page when the search field takes focus. */

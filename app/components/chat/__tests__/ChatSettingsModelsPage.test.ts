@@ -35,6 +35,10 @@ vi.mock('~/core/search/useModelSearch', () => ({
     useModelSearch: () => ({ query: ref(''), results: ref([]), ready: ref(true) }),
 }));
 
+vi.mock('~/composables/useThemeResolver', () => ({
+    useThemeOverrides: () => ref({}),
+}));
+
 vi.mock('~/composables/useIcon', () => ({
     useIcon: (name: string) => ref(name),
 }));
@@ -60,6 +64,7 @@ function mountPage(props: Record<string, unknown> = {}) {
     return mount(ChatSettingsModelsPage, {
         props: { selectedModel: 'openai/gpt-4o', detailId: null, ...props },
         global: {
+            directives: { theme: {} },
             stubs: {
                 UInput: { template: '<input v-bind="$attrs" />' },
                 UButton: {
@@ -180,11 +185,13 @@ describe('ChatSettingsModelsPage', () => {
     it('acts on the highlighted model from the action bar', async () => {
         const wrapper = mountPage();
         await flushPromises();
-        const use = wrapper.find('.settings-page-use');
-        expect(use.text()).toBe('In use');
-        expect(use.attributes('disabled')).toBeDefined();
+        const inUse = wrapper.find('.settings-page-use');
+        expect(inUse.text()).toBe('In use');
+        expect(inUse.attributes('disabled')).toBeDefined();
 
         await wrapper.find('[data-model-id="google/gemini-pro"] .settings-page-row-main').trigger('click');
+        // "In use" is a status; another highlighted model gets the real action.
+        const use = wrapper.find('.settings-page-use');
         expect(use.text()).toBe('Use model');
         await wrapper.find('[aria-label="Add to favorites"]').trigger('click');
         expect(store.addFavorite).toHaveBeenCalledWith(store.catalog.value[2]);

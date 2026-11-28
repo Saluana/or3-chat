@@ -121,6 +121,7 @@ function mountPopover(props: Record<string, unknown> = {}) {
             ...props,
         },
         global: {
+            directives: { theme: {} },
             stubs: {
                 // $attrs carries the click listener, so the stub forwards it once.
                 UButton: { template: '<button v-bind="$attrs"><slot/></button>' },

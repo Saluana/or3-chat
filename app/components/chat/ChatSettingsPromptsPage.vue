@@ -3,6 +3,7 @@
         <div class="settings-page-toolbar">
             <UInput
                 v-model="query"
+                v-bind="theme.searchProps.value"
                 class="settings-page-search w-full"
                 :icon="searchIcon"
                 placeholder="Search prompts"
@@ -23,6 +24,7 @@
                 <ul class="settings-page-list">
                     <li v-for="row in section.rows" :key="row.value">
                         <button
+                            v-theme="{ identifier: theme.ids.row, context: 'settings' }"
                             type="button"
                             class="settings-page-row-main"
                             :aria-pressed="row.value === highlighted"
@@ -64,12 +66,10 @@
             </p>
         </div>
 
-        <!-- The action bar acts on the highlighted prompt; editing opens the full library. -->
+        <!-- Secondary actions lead; the primary action sits at the trailing edge. -->
         <div class="settings-page-footer">
             <UButton
-                variant="outline"
-                color="neutral"
-                square
+                v-bind="theme.actionProps.value"
                 class="settings-page-action"
                 :icon="editIcon"
                 aria-label="Edit prompt"
@@ -77,12 +77,22 @@
                 @click="emit('edit-prompt', highlighted)"
             />
             <UButton
-                color="primary"
+                v-if="highlightedIsCurrent"
+                v-bind="theme.inUseProps.value"
+                class="settings-page-use is-current"
+                :icon="checkIcon"
+                disabled
+            >
+                In use
+            </UButton>
+            <UButton
+                v-else
+                v-bind="theme.useProps.value"
                 class="settings-page-use"
-                :disabled="highlightedIsCurrent || disabled"
+                :disabled="disabled"
                 @click="emit('select', highlighted)"
             >
-                {{ highlightedIsCurrent ? 'In use' : 'Use prompt' }}
+                Use prompt
             </UButton>
         </div>
     </div>
@@ -92,6 +102,7 @@
 import { computed, ref, watch } from 'vue';
 import type { PromptRecord } from '~/db/prompts';
 import { useIcon } from '~/composables/useIcon';
+import { useSettingsLibraryTheme } from '~/composables/chat/useSettingsLibraryTheme';
 import {
     DEFAULT_PROMPT_SELECTION,
     DISABLED_PROMPT_SELECTION,
@@ -112,6 +123,7 @@ const emit = defineEmits<{
     (e: 'select' | 'edit-prompt', value: string): void;
 }>();
 
+const theme = useSettingsLibraryTheme();
 const searchIcon = useIcon('ui.search');
 const promptIcon = useIcon('chat.system_prompt');
 const checkIcon = useIcon('ui.check');
@@ -355,20 +367,39 @@ const hiddenCount = computed(() => {
     display: flex;
     flex-shrink: 0;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.25rem;
+    --settings-action-size: 2.25rem;
     padding: 0.625rem 0.75rem 0.75rem;
     border-top: var(--md-border-width-subtle, var(--md-border-width)) solid
         color-mix(in srgb, var(--md-border-color) 40%, transparent);
 }
 
+/* One height for every control in the bar; touch screens get 44px targets. */
+@media (pointer: coarse) {
+    .settings-page-footer {
+        --settings-action-size: 2.75rem;
+    }
+}
+
 .settings-page-action {
     flex: none;
+    width: var(--settings-action-size);
+    height: var(--settings-action-size);
     justify-content: center;
 }
 
 .settings-page-use {
-    flex: 1;
+    flex: none;
+    min-width: 7.5rem;
+    height: var(--settings-action-size);
+    margin-inline-start: auto;
     justify-content: center;
+}
+
+/* "In use" is a status, not a faded button. */
+.settings-page-use.is-current:disabled {
+    cursor: default;
+    opacity: 1;
 }
 
 /* Below 16px, iOS Safari zooms the page when the search field takes focus. */

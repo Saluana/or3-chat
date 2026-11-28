@@ -88,6 +88,17 @@ pass `context` explicitly to both the resolver and directive. An arbitrary
 Workspace source buttons in assistant messages use Nuxt UI and the reactive button
 resolver. Target `button.message#message.workspace-source` for chat/document source
 links and `button.message#message.workspace-sources-toggle` for Show all/Show fewer.
+
+The chat settings Models and System prompts pages resolve their controls the same
+way. Target `input.settings#settings.library-search` for search,
+`button.settings#settings.library-filter` for the filter menu,
+`button.settings#settings.library-action` for the bar's icon actions, and
+`button.settings#settings.header-action` for the header's new/full-library icons.
+The filled **Use** and **In use** buttons resolve without the `settings` context,
+so flat `button.settings` rules leave their contrast intact: target
+`button#settings.library-use` and `button#settings.library-in-use`. Native scope
+chips and list rows carry `v-theme` identifiers `settings.library-chip` and
+`settings.library-row`.
 Their defaults use the compact `workspace` size, theme surface hover/active colors,
 and focus tokens, with 44px touch targets and wrapping for long source titles.
 

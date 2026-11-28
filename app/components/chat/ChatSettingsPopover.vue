@@ -28,7 +28,7 @@
             <template v-for="action in headerActions" :key="action.label">
                 <UTooltip :text="action.label" :delay-duration="300">
                     <UButton
-                        v-bind="closeButtonProps"
+                        v-bind="headerActionButtonProps"
                         class="chat-settings-header-action"
                         type="button"
                         :aria-label="action.label"
@@ -464,6 +464,8 @@ import {
 import { isMobile } from '~/state/global';
 import ModelCatalogProviderLogo from '~/components/modal/model-catalog/ModelCatalogProviderLogo.vue';
 import ChatSettingsModelsPage from './ChatSettingsModelsPage.vue';
+import { useButtonOverrides } from '~/composables/useTypedThemeOverrides';
+import { SETTINGS_LIBRARY_THEME_IDS } from '~/composables/chat/useSettingsLibraryTheme';
 import ChatSettingsPromptsPage from './ChatSettingsPromptsPage.vue';
 import {
     applyThinkingSelection,
@@ -756,6 +758,11 @@ const containerProps = computed(() => {
     });
     return overrides.value;
 });
+
+const headerActionButtonProps = useButtonOverrides(
+    { component: 'button', context: 'settings', identifier: SETTINGS_LIBRARY_THEME_IDS.headerAction },
+    { variant: 'ghost', color: 'neutral', size: 'sm', square: true }
+);
 
 const closeButtonProps = computed(() => {
     const overrides = useThemeOverrides({
