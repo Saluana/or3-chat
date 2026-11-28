@@ -2836,7 +2836,7 @@
     },
     {
       "source": "app/composables/index.ts",
-      "apiSha256": "ef19d5847847e6e58e021ea103d15bf8c862f0a2124076587161404e36b21a97",
+      "apiSha256": "4833c298cddbcfbf024112fdf52eec7de8a66c51e2f2da6e75234d7b269e30de",
       "runtime": "client",
       "publicPaths": [
         "~/composables"
@@ -3597,9 +3597,9 @@
           "declarations": [
             {
               "source": "app/composables/chat/useMessageEditing.ts",
-              "line": 64,
+              "line": 65,
               "syntaxKind": "InterfaceDeclaration",
-              "text": "export interface EditableMessage {\n    id?: string;\n    text?: string;\n    content?: string;\n}"
+              "text": "export interface EditableMessage {\n    id?: string;\n    text?: string;\n    content?: string;\n    edited?: boolean;\n}"
             }
           ]
         },
@@ -3681,7 +3681,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useMessageEditing.ts",
-              "line": 62,
+              "line": 63,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type EditSaveOutcome = 'saved' | 'unchanged' | 'cancelled' | 'ignored';"
             }
@@ -6813,7 +6813,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/chat/useAi.ts",
-                "line": 78,
+                "line": 79,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useChat(\n    msgs: ChatMessage[] = [],\n    initialThreadId?: string,\n    pendingPromptId?: string,\n    options: { historyAlreadyLoaded?: boolean; forceForeground?: boolean; excludedTools?: readonly string[]; toolDraftId?: () => string | undefined; paneBindingOwnedByView?: boolean } = {}\n);"
               }
@@ -6822,7 +6822,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useAi.ts",
-              "line": 78,
+              "line": 79,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useChat(\n    msgs: ChatMessage[] = [],\n    initialThreadId?: string,\n    pendingPromptId?: string,\n    options: { historyAlreadyLoaded?: boolean; forceForeground?: boolean; excludedTools?: readonly string[]; toolDraftId?: () => string | undefined; paneBindingOwnedByView?: boolean } = {}\n);"
             }
@@ -7321,7 +7321,7 @@
               "resolvedReturnType": null,
               "declaration": {
                 "source": "app/composables/chat/useMessageEditing.ts",
-                "line": 92,
+                "line": 94,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useMessageEditing(message: EditableMessageSource);"
               }
@@ -7330,7 +7330,7 @@
           "declarations": [
             {
               "source": "app/composables/chat/useMessageEditing.ts",
-              "line": 92,
+              "line": 94,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useMessageEditing(message: EditableMessageSource);"
             }
@@ -7373,7 +7373,7 @@
               "resolvedReturnType": "UseMultiPaneApi",
               "declaration": {
                 "source": "app/composables/core/useMultiPane.ts",
-                "line": 292,
+                "line": 291,
                 "syntaxKind": "FunctionDeclaration",
                 "text": "export function useMultiPane(\n    options: UseMultiPaneOptions = {}\n): UseMultiPaneApi;"
               }
@@ -7382,7 +7382,7 @@
           "declarations": [
             {
               "source": "app/composables/core/useMultiPane.ts",
-              "line": 292,
+              "line": 291,
               "syntaxKind": "FunctionDeclaration",
               "text": "export function useMultiPane(\n    options: UseMultiPaneOptions = {}\n): UseMultiPaneApi;"
             }
@@ -12089,7 +12089,7 @@
     },
     {
       "source": "app/utils/chat/tools-public.ts",
-      "apiSha256": "615f8452a511c8169ee3ff8ea925b5acdfa74dccbfccdaae5bf117f044b23a20",
+      "apiSha256": "e77764de8da7e7b478df7113644084d02e781876f3962f23a1a868de6f7f567b",
       "runtime": "client",
       "publicPaths": [
         "~/utils/chat/tools-public"
@@ -12176,7 +12176,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/types.ts",
-              "line": 145,
+              "line": 148,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ToolDefinition {\n    type: 'function';\n    function: {\n        name: string;\n        description: string;\n        parameters: import('~~/shared/chat/tool-schema').JsonSchemaObject;\n    };\n    ui?: {\n        label?: string;\n        icon?: string;\n        descriptionHint?: string;\n        defaultEnabled?: boolean;\n        category?: string;\n    };\n    runtime?: ToolRuntime;\n}"
             }
@@ -12190,7 +12190,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/types.ts",
-              "line": 112,
+              "line": 115,
               "syntaxKind": "InterfaceDeclaration",
               "text": "export interface ToolExecutionContext {\n    /** Recheck captured registry/project authority inside a host mutation transaction. */\n    assertToolAuthorized?: () => Promise<void>;\n    projectId?: string | null;\n    subject: string | null;\n    workspaceId: string | null;\n    threadId: string | null;\n    messageId: string | null;\n    callId: string;\n    requestId: string;\n    abortSignal: AbortSignal;\n    /** Model settings captured from the request that admitted this tool call. */\n    parentModel?: { model: string; thinking: boolean; reasoningEffort?: string | null };\n}"
             }
@@ -12218,7 +12218,7 @@
           "declarations": [
             {
               "source": "app/utils/chat/types.ts",
-              "line": 109,
+              "line": 112,
               "syntaxKind": "TypeAliasDeclaration",
               "text": "export type ToolRuntime = 'hybrid' | 'client' | 'server';"
             }
