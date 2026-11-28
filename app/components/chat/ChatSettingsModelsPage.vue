@@ -69,6 +69,7 @@
                             v-for="row in section.rows"
                             :key="row.id"
                             class="settings-page-row"
+                            :class="{ 'is-highlighted': row.highlighted }"
                             :data-model-id="row.id"
                         >
                             <button
@@ -93,6 +94,24 @@
                                     aria-label="In use"
                                 />
                             </button>
+                            <!-- Only the highlighted row carries its actions. -->
+                            <template v-if="row.highlighted">
+                                <UButton
+                                    v-bind="theme.actionProps.value"
+                                    class="settings-page-row-action"
+                                    :icon="highlightedFavorite ? starFilledIcon : starIcon"
+                                    :aria-label="highlightedFavorite ? 'Remove from favorites' : 'Add to favorites'"
+                                    :aria-pressed="highlightedFavorite"
+                                    @click="highlightedModel && toggleFavorite(highlightedModel)"
+                                />
+                                <UButton
+                                    v-bind="theme.actionProps.value"
+                                    class="settings-page-row-action"
+                                    :icon="infoIcon"
+                                    aria-label="Model details"
+                                    @click="openDetail(row.id, $event?.currentTarget ?? null)"
+                                />
+                            </template>
                         </li>
                     </ul>
                 </section>
@@ -112,25 +131,8 @@
                 </p>
             </div>
 
-            <!-- Secondary actions lead; the primary action sits at the trailing edge. -->
-            <div class="settings-page-footer settings-page-actions">
-                <UButton
-                    v-bind="theme.actionProps.value"
-                    class="settings-page-action"
-                    :icon="highlightedFavorite ? starFilledIcon : starIcon"
-                    :aria-label="highlightedFavorite ? 'Remove from favorites' : 'Add to favorites'"
-                    :aria-pressed="highlightedFavorite"
-                    :disabled="!highlightedModel"
-                    @click="highlightedModel && toggleFavorite(highlightedModel)"
-                />
-                <UButton
-                    v-bind="theme.actionProps.value"
-                    class="settings-page-action"
-                    :icon="infoIcon"
-                    aria-label="Model details"
-                    :disabled="!highlightedModel"
-                    @click="highlightedModel && openDetail(highlightedModel.id, $event?.currentTarget ?? null)"
-                />
+            <!-- One button that says what it will do; the model in use reads as a status. -->
+            <div v-if="highlightedModel" class="settings-page-footer settings-page-actions">
                 <UButton
                     v-if="highlightedIsCurrent"
                     v-bind="theme.inUseProps.value"
@@ -138,16 +140,16 @@
                     :icon="checkIcon"
                     disabled
                 >
-                    In use
+                    <span class="truncate">Using {{ highlightedName }}</span>
                 </UButton>
                 <UButton
                     v-else
                     v-bind="theme.useProps.value"
                     class="settings-page-use"
-                    :disabled="!highlightedModel || disabled"
-                    @click="highlightedModel && emit('select', highlightedModel.id)"
+                    :disabled="disabled"
+                    @click="emit('select', highlightedModel.id)"
                 >
-                    Use model
+                    <span class="truncate">Switch to {{ highlightedName }}</span>
                 </UButton>
             </div>
         </div>
@@ -432,6 +434,12 @@ const highlightedModel = computed(() =>
 const highlightedFavorite = computed(
     () => !!highlightedModel.value && isFavorite(highlightedModel.value.id)
 );
+/** "Anthropic: Claude Sonnet 5.5" reads as "Claude Sonnet 5.5" in the button. */
+const highlightedName = computed(() => {
+    const name = formatModelName(highlightedModel.value?.name || highlightedModel.value?.id || '');
+    const colon = name.indexOf(': ');
+    return colon > 0 ? name.slice(colon + 2) : name;
+});
 const highlightedIsCurrent = computed(
     () => !!highlightedModel.value && isSelected(highlightedModel.value)
 );
@@ -593,11 +601,30 @@ onMounted(() => {
     border-radius: var(--md-border-radius);
 }
 
-/* The highlighted row is the action bar's target. */
-.settings-page-row-main[aria-pressed='true'] {
+/* The highlighted row (button plus its actions) is the bar's target. */
+.settings-page-row.is-highlighted {
     background: var(--md-surface-container-low);
+    border-radius: var(--md-border-radius);
     box-shadow: inset 0 0 0 var(--md-border-width, 1px)
         color-mix(in srgb, var(--md-border-color) 80%, transparent);
+}
+
+.settings-page-row-action {
+    flex: none;
+    width: 2.25rem;
+    height: 2.25rem;
+    justify-content: center;
+}
+
+.settings-page-row-action:last-child {
+    margin-inline-end: 0.25rem;
+}
+
+@media (pointer: coarse) {
+    .settings-page-row-action {
+        width: 2.75rem;
+        height: 2.75rem;
+    }
 }
 
 .settings-page-row-icon {
@@ -650,7 +677,7 @@ onMounted(() => {
         background: var(--md-surface-hover);
     }
 
-    .settings-page-row-main:hover:not([aria-pressed='true']) {
+    .settings-page-row:not(.is-highlighted) .settings-page-row-main:hover {
         background: var(--md-surface-hover);
     }
 }
@@ -670,35 +697,23 @@ onMounted(() => {
 }
 
 .settings-page-actions {
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
-    --settings-action-size: 2.25rem;
+    --settings-action-size: 2.5rem;
 }
 
-/* One height for every control in the bar; touch screens get 44px targets. */
 @media (pointer: coarse) {
     .settings-page-actions {
-        --settings-action-size: 2.75rem;
+        --settings-action-size: 3rem;
     }
 }
 
-.settings-page-action {
-    flex: none;
-    width: var(--settings-action-size);
-    height: var(--settings-action-size);
-    justify-content: center;
-}
-
 .settings-page-use {
-    flex: none;
-    min-width: 7.5rem;
+    width: 100%;
+    min-width: 0;
     height: var(--settings-action-size);
-    margin-inline-start: auto;
     justify-content: center;
 }
 
-/* "In use" is a status, not a faded button. */
+/* "Using …" is a status, not a faded button. */
 .settings-page-use.is-current:disabled {
     cursor: default;
     opacity: 1;

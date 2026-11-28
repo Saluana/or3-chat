@@ -182,17 +182,21 @@ describe('ChatSettingsModelsPage', () => {
         expect(headings(wrapper)).toEqual(['Favorites', 'Recent', 'All models']);
     });
 
-    it('acts on the highlighted model from the action bar', async () => {
+    it('names the switch in the bar and puts actions on the highlighted row only', async () => {
         const wrapper = mountPage();
         await flushPromises();
         const inUse = wrapper.find('.settings-page-use');
-        expect(inUse.text()).toBe('In use');
+        expect(inUse.text()).toBe('Using gpt-4o');
         expect(inUse.attributes('disabled')).toBeDefined();
+        expect(wrapper.findAll('[aria-label="Model details"]')).toHaveLength(1);
 
-        await wrapper.find('[data-model-id="google/gemini-pro"] .settings-page-row-main').trigger('click');
-        // "In use" is a status; another highlighted model gets the real action.
+        const gemini = wrapper.find('[data-model-id="google/gemini-pro"]');
+        await gemini.find('.settings-page-row-main').trigger('click');
+        // The status gives way to a button that says what it will do.
         const use = wrapper.find('.settings-page-use');
-        expect(use.text()).toBe('Use model');
+        expect(use.text()).toBe('Switch to gemini-pro');
+        expect(gemini.find('[aria-label="Model details"]').exists()).toBe(true);
+        expect(wrapper.findAll('[aria-label="Model details"]')).toHaveLength(1);
         await wrapper.find('[aria-label="Add to favorites"]').trigger('click');
         expect(store.addFavorite).toHaveBeenCalledWith(store.catalog.value[2]);
         await wrapper.find('[aria-label="Model details"]').trigger('click');

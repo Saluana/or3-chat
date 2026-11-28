@@ -92,9 +92,9 @@ links and `button.message#message.workspace-sources-toggle` for Show all/Show fe
 The chat settings Models and System prompts pages resolve their controls the same
 way. Target `input.settings#settings.library-search` for search,
 `button.settings#settings.library-filter` for the filter menu,
-`button.settings#settings.library-action` for the bar's icon actions, and
+`button.settings#settings.library-action` for the highlighted row's icon actions, and
 `button.settings#settings.header-action` for the header's new/full-library icons.
-The filled **Use** and **In use** buttons resolve without the `settings` context,
+The bottom **Switch to …** and **Using …** buttons resolve without the `settings` context,
 so flat `button.settings` rules leave their contrast intact: target
 `button#settings.library-use` and `button#settings.library-in-use`. Native scope
 chips and list rows carry `v-theme` identifiers `settings.library-chip` and

@@ -317,7 +317,8 @@ describe('ChatSettingsPopover options layout', () => {
 
         await rows[0]!.trigger('click');
         expect(mockPrompts.updateThread).not.toHaveBeenCalled();
-        await wrapper.findAll('button').find(button => button.text() === 'Use prompt')!.trigger('click');
+        expect(wrapper.find('.settings-page-use').text()).toBe('Switch to default prompt');
+        await wrapper.find('.settings-page-use').trigger('click');
         await flushPromises();
         expect(mockPrompts.updateThread).toHaveBeenCalledWith('chat-1', '__or3_default_prompt__');
         expect(wrapper.find('.chat-settings-title').text()).toBe('Chat settings');
@@ -350,10 +351,10 @@ describe('ChatSettingsPopover options layout', () => {
         await wrapper.find('[aria-label="Search system prompts"]').setValue('review');
         expect(wrapper.findAll('.settings-page-row-title').map(title => title.text())).toEqual(['Code reviewer']);
 
-        const edit = wrapper.find('[aria-label="Edit prompt"]');
-        expect(edit.attributes('disabled')).toBeDefined();
+        // Edit appears only on a highlighted saved prompt.
+        expect(wrapper.find('[aria-label="Edit prompt"]').exists()).toBe(false);
         await wrapper.find('.settings-page-row-main').trigger('click');
-        await edit.trigger('click');
+        await wrapper.find('[aria-label="Edit prompt"]').trigger('click');
 
         await wrapper.find('[aria-label="New prompt"]').trigger('click');
         await wrapper.find('[aria-label="Open full library"]').trigger('click');

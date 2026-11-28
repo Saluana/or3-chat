@@ -22,7 +22,12 @@
             >
                 <h3 v-if="section.title" class="settings-page-heading">{{ section.title }}</h3>
                 <ul class="settings-page-list">
-                    <li v-for="row in section.rows" :key="row.value">
+                    <li
+                        v-for="row in section.rows"
+                        :key="row.value"
+                        class="settings-page-row"
+                        :class="{ 'is-highlighted': row.value === highlighted }"
+                    >
                         <button
                             v-theme="{ identifier: theme.ids.row, context: 'settings' }"
                             type="button"
@@ -47,6 +52,14 @@
                                 aria-label="In use"
                             />
                         </button>
+                        <UButton
+                            v-if="row.value === highlighted && highlightedIsSaved"
+                            v-bind="theme.actionProps.value"
+                            class="settings-page-row-action"
+                            :icon="editIcon"
+                            aria-label="Edit prompt"
+                            @click="emit('edit-prompt', highlighted)"
+                        />
                     </li>
                 </ul>
             </section>
@@ -66,16 +79,8 @@
             </p>
         </div>
 
-        <!-- Secondary actions lead; the primary action sits at the trailing edge. -->
+        <!-- One button that says what it will do; the prompt in use reads as a status. -->
         <div class="settings-page-footer">
-            <UButton
-                v-bind="theme.actionProps.value"
-                class="settings-page-action"
-                :icon="editIcon"
-                aria-label="Edit prompt"
-                :disabled="!highlightedIsSaved"
-                @click="emit('edit-prompt', highlighted)"
-            />
             <UButton
                 v-if="highlightedIsCurrent"
                 v-bind="theme.inUseProps.value"
@@ -83,7 +88,7 @@
                 :icon="checkIcon"
                 disabled
             >
-                In use
+                <span class="truncate">Using {{ highlightedName }}</span>
             </UButton>
             <UButton
                 v-else
@@ -92,7 +97,7 @@
                 :disabled="disabled"
                 @click="emit('select', highlighted)"
             >
-                Use prompt
+                <span class="truncate">Switch to {{ highlightedName }}</span>
             </UButton>
         </div>
     </div>
@@ -134,6 +139,11 @@ const query = ref('');
 // Tapping a row highlights it for the action bar; tapping it again uses it.
 const highlighted = ref(props.selection);
 const highlightedIsCurrent = computed(() => highlighted.value === props.selection);
+const highlightedName = computed(() => {
+    if (highlighted.value === DEFAULT_PROMPT_SELECTION) return 'default prompt';
+    if (highlighted.value === DISABLED_PROMPT_SELECTION) return 'no system prompt';
+    return props.prompts.find((prompt) => prompt.id === highlighted.value)?.title || 'Untitled prompt';
+});
 const highlightedIsSaved = computed(() =>
     props.prompts.some((prompt) => prompt.id === highlighted.value)
 );
@@ -282,7 +292,8 @@ const hiddenCount = computed(() => {
 
 .settings-page-row-main {
     display: grid;
-    width: 100%;
+    flex: 1;
+    min-width: 0;
     grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: center;
     column-gap: 0.75rem;
@@ -295,16 +306,37 @@ const hiddenCount = computed(() => {
 
 /* Touch screens keep :hover on the last tapped row, so only hover-capable pointers get it. */
 @media (hover: hover) {
-    .settings-page-row-main:hover:not([aria-pressed='true']) {
+    .settings-page-row:not(.is-highlighted) .settings-page-row-main:hover {
         background: var(--md-surface-hover);
     }
 }
 
-/* The highlighted row is the action bar's target. */
-.settings-page-row-main[aria-pressed='true'] {
+.settings-page-row {
+    display: flex;
+    align-items: center;
+}
+
+/* The highlighted row (button plus its edit action) is the bar's target. */
+.settings-page-row.is-highlighted {
     background: var(--md-surface-container-low);
+    border-radius: var(--md-border-radius);
     box-shadow: inset 0 0 0 var(--md-border-width, 1px)
         color-mix(in srgb, var(--md-border-color) 80%, transparent);
+}
+
+.settings-page-row-action {
+    flex: none;
+    width: 2.25rem;
+    height: 2.25rem;
+    margin-inline-end: 0.25rem;
+    justify-content: center;
+}
+
+@media (pointer: coarse) {
+    .settings-page-row-action {
+        width: 2.75rem;
+        height: 2.75rem;
+    }
 }
 
 .settings-page-row-main:focus-visible {
@@ -364,39 +396,27 @@ const hiddenCount = computed(() => {
 }
 
 .settings-page-footer {
-    display: flex;
     flex-shrink: 0;
-    align-items: center;
-    gap: 0.25rem;
-    --settings-action-size: 2.25rem;
     padding: 0.625rem 0.75rem 0.75rem;
     border-top: var(--md-border-width-subtle, var(--md-border-width)) solid
         color-mix(in srgb, var(--md-border-color) 40%, transparent);
+    --settings-action-size: 2.5rem;
 }
 
-/* One height for every control in the bar; touch screens get 44px targets. */
 @media (pointer: coarse) {
     .settings-page-footer {
-        --settings-action-size: 2.75rem;
+        --settings-action-size: 3rem;
     }
 }
 
-.settings-page-action {
-    flex: none;
-    width: var(--settings-action-size);
-    height: var(--settings-action-size);
-    justify-content: center;
-}
-
 .settings-page-use {
-    flex: none;
-    min-width: 7.5rem;
+    width: 100%;
+    min-width: 0;
     height: var(--settings-action-size);
-    margin-inline-start: auto;
     justify-content: center;
 }
 
-/* "In use" is a status, not a faded button. */
+/* "Using …" is a status, not a faded button. */
 .settings-page-use.is-current:disabled {
     cursor: default;
     opacity: 1;
